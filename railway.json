@@ -1,6 +1,6 @@
 {
-  "build": [
-    "pip install -r requirements.txt"
-  ],
-  "start": "python testbot.py"
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "start": "python bot.py"
 }
