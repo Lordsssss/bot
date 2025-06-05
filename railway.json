@@ -1,6 +1,3 @@
 {
-  "build": {
-    "builder": "NIXPACKS"
-  },
   "start": "python testbot.py"
 }
