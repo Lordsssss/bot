@@ -84,3 +84,6 @@ async def on_message(message):
         bait = random.choice(rage_bait_replies)
         gif = random.choice(rage_gifs)
         await message.reply(f"{bait}\n{gif}")
+
+
+client.run(TOKEN)
