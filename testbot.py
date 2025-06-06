@@ -7,8 +7,8 @@ from collections import defaultdict
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 TARGET_USER_IDS = [549283791508602895, 465652511081103370, 305166432893796352]
-SPAM_THRESHOLD = 5
-SPAM_DETECTION_WINDOW = timedelta(seconds=30)
+SPAM_THRESHOLD = 8
+SPAM_DETECTION_WINDOW = timedelta(seconds=60)
 RESET_COOLDOWN = timedelta(minutes=5)
 
 rage_bait_replies = [
@@ -47,6 +47,7 @@ client = discord.Client(intents=intents)
 user_messages = defaultdict(list)
 user_spamming = defaultdict(bool)
 user_last_message_time = {}
+user_reply_count = defaultdict(int)
 
 @client.event
 async def on_ready():
@@ -60,10 +61,9 @@ async def on_message(message):
     now = datetime.utcnow()
     user_id = message.author.id
 
-    # Track recent messages (last 30 seconds)
+    # Clean up old messages (30s window)
     user_messages[user_id] = [
-        t for t in user_messages[user_id]
-        if now - t <= SPAM_DETECTION_WINDOW
+        t for t in user_messages[user_id] if now - t <= SPAM_DETECTION_WINDOW
     ]
     user_messages[user_id].append(now)
     user_last_message_time[user_id] = now
@@ -72,18 +72,22 @@ async def on_message(message):
     if len(user_messages[user_id]) >= SPAM_THRESHOLD:
         user_spamming[user_id] = True
 
-    # If spamming, keep replying
+    # While spamming
     if user_spamming[user_id]:
-        # Stop if silence for 5+ minutes
+        # Stop if inactive for 5+ minutes
         if now - user_last_message_time[user_id] > RESET_COOLDOWN:
             user_spamming[user_id] = False
             user_messages[user_id] = []
+            user_reply_count[user_id] = 0
             return
 
-        # Otherwise, send rage bait
-        bait = random.choice(rage_bait_replies)
-        gif = random.choice(rage_gifs)
-        await message.reply(f"{bait}\n{gif}")
+        # Count how many messages since spamming started
+        user_reply_count[user_id] += 1
 
+        # Only reply every 2nd message
+        if user_reply_count[user_id] % 2 == 0:
+            bait = random.choice(rage_bait_replies)
+            gif = random.choice(rage_gifs)
+            await message.reply(f"{bait}\n{gif}")
 
 client.run(TOKEN)
