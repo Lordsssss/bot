@@ -2,8 +2,10 @@ import os
 import discord
 import random
 from discord import app_commands
-from discord.ext import commands
-from db import get_user, update_user_points, users, check_and_update_daily_usage
+from discord.ext import commands, tasks
+from db import get_user, update_user_points, users, check_and_update_daily_usage, record_weekly_winner, get_winners_history, winners_history
+from datetime import datetime, timedelta
+import asyncio
 
 ALLOWED_CHANNEL_ID = 1381720147487625258  # 🔒 Restrict commands to this channel
 
@@ -16,6 +18,7 @@ tree = client.tree
 async def on_ready():
     await tree.sync()
     print(f"Logged in as {client.user} (slash commands synced)")
+    weekly_reset.start()  # Start the weekly reset task
 
 @tree.command(name="balance", description="Check your current point balance")
 async def balance(interaction: discord.Interaction):
@@ -131,5 +134,126 @@ async def slot(interaction: discord.Interaction, amount: int):
         f"🎰 **Slot Machine** 🎰\n{slot_display}\n{outcome}\nYour new balance is {new_balance} points."
     )
 
+# Weekly reset task - runs every Sunday at midnight UTC
+@tasks.loop(hours=24)
+async def weekly_reset():
+    now = datetime.utcnow()
+    # Check if it's Sunday (weekday 6)
+    if now.weekday() == 6:
+        channel = client.get_channel(ALLOWED_CHANNEL_ID)
+        if channel:
+            # Find the winner before resetting points
+            winner = None
+            highest_points = 0
+            
+            async for user_doc in users.find().sort("points", -1).limit(1):
+                winner = user_doc
+                highest_points = user_doc["points"]
+            
+            if winner:
+                try:
+                    # Try to get member info for a nicer display name
+                    guild = channel.guild
+                    member = await guild.fetch_member(int(winner["_id"]))
+                    winner_name = member.display_name
+                except:
+                    winner_name = f"User ID {winner['_id']}"
+                
+                # Record the winner in history
+                await record_weekly_winner(
+                    user_id=winner["_id"],
+                    username=winner_name,
+                    points=highest_points,
+                    date=now.strftime("%Y-%m-%d")
+                )
+                
+                # Announce the winner
+                embed = discord.Embed(
+                    title="🎉 Weekly Contest Winner! 🎉",
+                    description=f"**{winner_name}** won this week's contest with **{highest_points}** points!",
+                    color=0xFFD700  # Gold color
+                )
+                embed.set_footer(text="All points have been reset for the new week. Good luck!")
+                await channel.send(embed=embed)
+                
+                # Reset everyone's points to the starting amount (100)
+                await users.update_many({}, {"$set": {"points": 100}})
+                
+                print(f"Weekly reset completed. Winner: {winner_name} with {highest_points} points")
+
+@weekly_reset.before_loop
+async def before_weekly_reset():
+    # Wait until the bot is ready before starting the task
+    await client.wait_until_ready()
+    
+    # Calculate time until the next Sunday at midnight UTC
+    now = datetime.utcnow()
+    days_until_sunday = (6 - now.weekday()) % 7  # 0 if today is Sunday
+    if days_until_sunday == 0 and now.hour > 0:  # If Sunday but past midnight
+        days_until_sunday = 7
+    
+    target_time = datetime(now.year, now.month, now.day, 0, 0, 0) + timedelta(days=days_until_sunday)
+    seconds_until_target = (target_time - now).total_seconds()
+    
+    # Sleep until the next Sunday at midnight
+    print(f"Scheduling first weekly reset for {target_time} UTC")
+    await asyncio.sleep(seconds_until_target)
+
+@tree.command(name="nextweek", description="Check when the next weekly reset happens")
+async def next_reset(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return
+    
+    now = datetime.utcnow()
+    days_until_sunday = (6 - now.weekday()) % 7
+    if days_until_sunday == 0 and now.hour > 0:
+        days_until_sunday = 7
+    
+    hours_remaining = (days_until_sunday * 24) - now.hour
+    
+    await interaction.response.send_message(
+        f"The next weekly reset will happen in {days_until_sunday} days and {now.hour} hours."
+    )
+
+@tree.command(name="halloffame", description="View the hall of fame with past weekly winners")
+async def hall_of_fame(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+        
+    winners = await get_winners_history(limit=10)
+    
+    if not winners:
+        await interaction.response.send_message("No winners have been recorded yet!")
+        return
+        
+    embed = discord.Embed(
+        title="🏆 Hall of Fame - Weekly Winners 🏆",
+        description="History of past weekly winners",
+        color=0xFFD700
+    )
+    
+    for winner in winners:
+        embed.add_field(
+            name=f"{winner['date']}",
+            value=f"**{winner['username']}** - {winner['points']} points",
+            inline=False
+        )
+    
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="mywins", description="Check how many times you've won")
+async def my_wins(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+        
+    user_id = str(interaction.user.id)
+    count = await winners_history.count_documents({"user_id": user_id})
+    
+    if count == 0:
+        await interaction.response.send_message(f"{interaction.user.mention}, you haven't won any weekly contests yet. Keep trying!")
+    elif count == 1:
+        await interaction.response.send_message(f"{interaction.user.mention}, you've won 1 weekly contest. Congratulations!")
+    else:
+        await interaction.response.send_message(f"{interaction.user.mention}, you've won {count} weekly contests. Impressive!")
 
 client.run(os.getenv("DISCORD_TOKEN"))
