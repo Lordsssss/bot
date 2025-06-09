@@ -6,6 +6,7 @@ from discord.ext import commands
 from db import get_user, update_user_points, users
 
 intents = discord.Intents.default()
+intents.members = True  # Needed to access member display names
 client = commands.Bot(command_prefix="!", intents=intents)
 tree = client.tree
 
@@ -32,7 +33,7 @@ async def bet(interaction: discord.Interaction, amount: int):
     user = await get_user(user_id)
 
     outcome = random.choice(["win", "lose"])
-    result = 50 if outcome == "win" else -50
+    result = amount if outcome == "win" else -amount
     await update_user_points(user_id, result)
 
     msg = f"You {'won' if result > 0 else 'lost'} the bet! {'+' if result > 0 else ''}{result} points."
@@ -46,11 +47,15 @@ async def leaderboard(interaction: discord.Interaction):
 
     index = 1
     async for user in top_users:
-        member = interaction.guild.get_member(int(user["_id"]))
-        name = member.display_name if member else f"User ID {user['_id']}"
+        try:
+            member = await interaction.guild.fetch_member(int(user["_id"]))
+            name = member.display_name
+        except:
+            name = f"User ID {user['_id']}"
         leaderboard_text += f"**#{index}** {name} — {user['points']} points\n"
         index += 1
 
     await interaction.response.send_message(leaderboard_text)
+
 
 client.run(os.getenv("DISCORD_TOKEN"))
