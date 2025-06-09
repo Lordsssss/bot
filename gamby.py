@@ -5,6 +5,8 @@ from discord import app_commands
 from discord.ext import commands
 from db import get_user, update_user_points, users
 
+ALLOWED_CHANNEL_ID = 1381720147487625258  # 🔒 Restrict commands to this channel
+
 intents = discord.Intents.default()
 intents.members = True  # Needed to access member display names
 client = commands.Bot(command_prefix="!", intents=intents)
@@ -17,6 +19,9 @@ async def on_ready():
 
 @tree.command(name="balance", description="Check your current point balance")
 async def balance(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+
     user = await get_user(str(interaction.user.id))
     await interaction.response.send_message(
         f"{interaction.user.mention}, your balance is {user['points']} points."
@@ -25,6 +30,9 @@ async def balance(interaction: discord.Interaction):
 @tree.command(name="bet", description="Bet on a coin flip (1-50 points)")
 @app_commands.describe(amount="Amount to bet (max 50)")
 async def bet(interaction: discord.Interaction, amount: int):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+
     if amount > 50 or amount <= 0:
         await interaction.response.send_message("You can only bet between 1 and 50 points.", ephemeral=True)
         return
@@ -42,6 +50,9 @@ async def bet(interaction: discord.Interaction, amount: int):
 
 @tree.command(name="leaderboard", description="Show the top 10 users by points")
 async def leaderboard(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+
     top_users = users.find().sort("points", -1).limit(10)
     leaderboard_text = "**🏆 Leaderboard 🏆**\n"
 
@@ -56,6 +67,5 @@ async def leaderboard(interaction: discord.Interaction):
         index += 1
 
     await interaction.response.send_message(leaderboard_text)
-
 
 client.run(os.getenv("DISCORD_TOKEN"))
