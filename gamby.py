@@ -3,7 +3,7 @@ import discord
 import random
 from discord import app_commands
 from discord.ext import commands
-from db import get_user, update_user_points, users
+from db import get_user, update_user_points, users, check_and_update_daily_usage
 
 ALLOWED_CHANNEL_ID = 1381720147487625258  # 🔒 Restrict commands to this channel
 
@@ -27,7 +27,7 @@ async def balance(interaction: discord.Interaction):
         f"{interaction.user.mention}, your balance is {user['points']} points."
     )
 
-@tree.command(name="bet", description="Bet on a coin flip (1-50 points)")
+@tree.command(name="bet", description="Bet on a coin flip (1-50 points) - once per day")
 @app_commands.describe(amount="Amount to bet (max 50)")
 async def bet(interaction: discord.Interaction, amount: int):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
@@ -38,6 +38,13 @@ async def bet(interaction: discord.Interaction, amount: int):
         return
 
     user_id = str(interaction.user.id)
+    
+    # Check if user already used bet today
+    can_use = await check_and_update_daily_usage(user_id, "bet")
+    if not can_use:
+        await interaction.response.send_message("You've already used the bet command today! Come back tomorrow.", ephemeral=True)
+        return
+        
     user = await get_user(user_id)
 
     outcome = random.choice(["win", "lose"])
@@ -70,7 +77,7 @@ async def leaderboard(interaction: discord.Interaction):
 
 import random
 
-@tree.command(name="slot", description="Spin the slot machine and try your luck!")
+@tree.command(name="slot", description="Spin the slot machine and try your luck! - once per day")
 @app_commands.describe(amount="Amount to bet (max 50)")
 async def slot(interaction: discord.Interaction, amount: int):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
@@ -81,6 +88,13 @@ async def slot(interaction: discord.Interaction, amount: int):
         return
 
     user_id = str(interaction.user.id)
+    
+    # Check if user already used slot today
+    can_use = await check_and_update_daily_usage(user_id, "slot")
+    if not can_use:
+        await interaction.response.send_message("You've already used the slot machine today! Come back tomorrow.", ephemeral=True)
+        return
+        
     user = await get_user(user_id)
 
     symbols = ["🍒", "🍋", "🍇", "💎", "🔔"]
