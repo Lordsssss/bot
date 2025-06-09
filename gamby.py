@@ -30,22 +30,22 @@ async def balance(interaction: discord.Interaction):
         f"{interaction.user.mention}, your balance is {user['points']} points."
     )
 
-@tree.command(name="bet", description="Bet on a coin flip (1-50 points) - once per day")
-@app_commands.describe(amount="Amount to bet (max 50)")
-async def bet(interaction: discord.Interaction, amount: int):
+@tree.command(name="coinflip", description="Bet on a coin flip (1-100 points) - once per day")
+@app_commands.describe(amount="Amount to bet (max 100)")
+async def coinflip(interaction: discord.Interaction, amount: int):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return  # silently ignore
 
-    if amount > 50 or amount <= 0:
-        await interaction.response.send_message("You can only bet between 1 and 50 points.", ephemeral=True)
+    if amount > 100 or amount <= 0:
+        await interaction.response.send_message("You can only bet between 1 and 100 points.", ephemeral=True)
         return
 
     user_id = str(interaction.user.id)
     
-    # Check if user already used bet today
-    can_use = await check_and_update_daily_usage(user_id, "bet")
+    # Check if user already used coinflip today
+    can_use = await check_and_update_daily_usage(user_id, "coinflip")
     if not can_use:
-        await interaction.response.send_message("You've already used the bet command today! Come back tomorrow.", ephemeral=True)
+        await interaction.response.send_message("You've already used the coinflip command today! Come back tomorrow.", ephemeral=True)
         return
         
     user = await get_user(user_id)
