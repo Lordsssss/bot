@@ -1,4 +1,4 @@
-from discord import Interaction
+from discord import Interaction, app_commands
 from bot.db.connection import users
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import discord

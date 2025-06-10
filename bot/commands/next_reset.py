@@ -1,4 +1,4 @@
-from discord import Interaction
+from discord import Interaction, app_commands
 from datetime import datetime
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import discord

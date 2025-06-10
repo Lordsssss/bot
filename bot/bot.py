@@ -1,5 +1,5 @@
 import os
-from discord.ext import commands
+from discord.ext import commands, Interaction, app_commands
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 from bot.commands import (
     balance,
