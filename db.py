@@ -55,3 +55,35 @@ async def get_winners_history(limit=10):
     """Retrieve past winners, most recent first"""
     cursor = winners_history.find().sort("date", -1).limit(limit)
     return await cursor.to_list(length=limit)
+
+async def check_weekly_limit(user_id, bet_amount):
+    """
+    Checks if user can bet based on weekly limit and current points
+    Returns: (bool can_bet, str reason_if_not)
+    """
+    user = await get_user(user_id)
+    
+    # Check if user has negative points
+    if user["points"] <= 0:
+        return False, "You don't have enough points to bet."
+        
+    # Check if user has enough points for this bet
+    if user["points"] < bet_amount:
+        return False, f"You don't have enough points. Your balance is {user['points']} points."
+    
+    # Get weekly spending (default to 0 if not set)
+    weekly_spent = user.get("weekly_spent", 0)
+    weekly_limit = 1000
+    
+    # Check if this bet would exceed the limit
+    if weekly_spent + bet_amount > weekly_limit:
+        remaining = weekly_limit - weekly_spent
+        return False, f"This bet would exceed your weekly limit of {weekly_limit} points. You can only bet {remaining} more points this week."
+    
+    # Update weekly spending
+    await users.update_one(
+        {"_id": user_id}, 
+        {"$inc": {"weekly_spent": bet_amount}}
+    )
+    
+    return True, None
