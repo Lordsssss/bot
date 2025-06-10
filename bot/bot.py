@@ -1,6 +1,5 @@
 import os
 from discord.ext import commands
-from dotenv import load_dotenv
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 from bot.commands import (
     balance,
@@ -14,8 +13,6 @@ from bot.commands import (
     my_wins,
     weekly_reset,
 )
-
-load_dotenv()
 
 intents = commands.Intents.default()
 intents.members = True
