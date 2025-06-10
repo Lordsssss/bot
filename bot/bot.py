@@ -1,6 +1,6 @@
 import os
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord import Interaction,app_commands
 
 from bot.utils.constants import ALLOWED_CHANNEL_ID
@@ -17,7 +17,7 @@ from bot.commands import (
     weekly_reset,
 )
 
-intents = commands.Intents.default()
+intents = discord.Intents.default()
 intents.members = True
 
 client = commands.Bot(command_prefix="!", intents=intents)
@@ -37,8 +37,7 @@ def start_bot():
     client.tree.add_command(leaderboard.leaderboard)
     client.tree.add_command(hall_of_fame.hall_of_fame)
     client.tree.add_command(next_reset.next_reset)
-    client.tree.add_command(weekly_limit.weekly_limit)
+    client.tree.add_command(weekly_limit.limit)
     client.tree.add_command(my_wins.my_wins)
-    client.tree.add_command(weekly_reset.weekly_reset)
 
     client.run(os.getenv("DISCORD_TOKEN"))
