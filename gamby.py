@@ -3,7 +3,7 @@ import discord
 import random
 from discord import app_commands
 from discord.ext import commands, tasks
-from db import get_user, update_user_points, users, check_and_update_daily_usage, record_weekly_winner, get_winners_history, winners_history
+from db import get_user, update_user_points, users, check_weekly_limit, record_weekly_winner, get_winners_history, winners_history
 from datetime import datetime, timedelta
 import asyncio
 
@@ -30,7 +30,7 @@ async def balance(interaction: discord.Interaction):
         f"{interaction.user.mention}, your balance is {user['points']} points."
     )
 
-@tree.command(name="coinflip", description="Bet on a coin flip (1-100 points) - once per day")
+@tree.command(name="coinflip", description="Bet on a coin flip (1-100 points)")
 @app_commands.describe(amount="Amount to bet (max 100)")
 async def coinflip(interaction: discord.Interaction, amount: int):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
@@ -42,10 +42,10 @@ async def coinflip(interaction: discord.Interaction, amount: int):
 
     user_id = str(interaction.user.id)
     
-    # Check if user already used coinflip today
-    can_use = await check_and_update_daily_usage(user_id, "coinflip")
-    if not can_use:
-        await interaction.response.send_message("You've already used the coinflip command today! Come back tomorrow.", ephemeral=True)
+    # Check weekly limit and points
+    can_bet, reason = await check_weekly_limit(user_id, amount)
+    if not can_bet:
+        await interaction.response.send_message(reason, ephemeral=True)
         return
         
     user = await get_user(user_id)
@@ -80,7 +80,7 @@ async def leaderboard(interaction: discord.Interaction):
 
 import random
 
-@tree.command(name="slot", description="Spin the slot machine and try your luck! - once per day")
+@tree.command(name="slot", description="Spin the slot machine and try your luck!")
 @app_commands.describe(amount="Amount to bet (max 50)")
 async def slot(interaction: discord.Interaction, amount: int):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
@@ -92,10 +92,10 @@ async def slot(interaction: discord.Interaction, amount: int):
 
     user_id = str(interaction.user.id)
     
-    # Check if user already used slot today
-    can_use = await check_and_update_daily_usage(user_id, "slot")
-    if not can_use:
-        await interaction.response.send_message("You've already used the slot machine today! Come back tomorrow.", ephemeral=True)
+    # Check weekly limit and points
+    can_bet, reason = await check_weekly_limit(user_id, amount)
+    if not can_bet:
+        await interaction.response.send_message(reason, ephemeral=True)
         return
         
     user = await get_user(user_id)
@@ -177,7 +177,7 @@ async def weekly_reset():
                 await channel.send(embed=embed)
                 
                 # Reset everyone's points to the starting amount (100)
-                await users.update_many({}, {"$set": {"points": 100}})
+                await users.update_many({}, {"$set": {"points": 100, "weekly_spent": 0}})
                 
                 print(f"Weekly reset completed. Winner: {winner_name} with {highest_points} points")
 
@@ -255,5 +255,21 @@ async def my_wins(interaction: discord.Interaction):
         await interaction.response.send_message(f"{interaction.user.mention}, you've won 1 weekly contest. Congratulations!")
     else:
         await interaction.response.send_message(f"{interaction.user.mention}, you've won {count} weekly contests. Impressive!")
+
+@tree.command(name="limit", description="Check your weekly betting limit status")
+async def limit(interaction: discord.Interaction):
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return  # silently ignore
+        
+    user_id = str(interaction.user.id)
+    user = await get_user(user_id)
+    weekly_spent = user.get("weekly_spent", 0)
+    weekly_limit = 1000
+    remaining = weekly_limit - weekly_spent
+    
+    await interaction.response.send_message(
+        f"{interaction.user.mention}, you've used {weekly_spent}/{weekly_limit} points of your weekly betting limit. " +
+        f"You can bet {remaining} more points this week."
+    )
 
 client.run(os.getenv("DISCORD_TOKEN"))
