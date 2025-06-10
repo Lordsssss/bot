@@ -1,4 +1,5 @@
-from discord import Interaction, app_commands
+import discord
+from discord import Interaction,app_commands
 from bot.db.user import get_user, update_user_points, check_weekly_limit
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import random

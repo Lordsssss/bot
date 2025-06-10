@@ -2,6 +2,7 @@ from discord import Interaction, app_commands
 from datetime import datetime
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import discord
+from discord import Interaction,app_commands
 
 @discord.app_commands.command(name="nextweek", description="Check when the next weekly reset happens")
 async def next_reset(interaction: Interaction):

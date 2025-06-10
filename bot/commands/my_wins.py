@@ -1,4 +1,5 @@
-from discord import Interaction, app_commands
+import discord
+from discord import Interaction,app_commands
 from bot.db.connection import winners_history
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 

@@ -4,7 +4,8 @@ from bot.db.winners import record_weekly_winner
 from datetime import datetime, timedelta
 import asyncio
 from bot.utils.constants import ALLOWED_CHANNEL_ID
-from discord import Interaction, app_commands
+import discord
+from discord import Interaction,app_commands
 
 def start(client):
     @tasks.loop(hours=24)

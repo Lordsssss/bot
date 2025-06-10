@@ -2,6 +2,7 @@ from discord import Interaction, app_commands
 from bot.db.connection import users
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import discord
+from discord import Interaction,app_commands
 
 @discord.app_commands.command(name="leaderboard", description="Show the top 10 users by points")
 async def leaderboard(interaction: Interaction):
