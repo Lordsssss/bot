@@ -8,13 +8,14 @@ from bot.commands import (
     balance,
     coinflip,
     slot,
-    roulette,  # Add this import
+    roulette,
     leaderboard,
     hall_of_fame,
     next_reset,
     weekly_limit,
     my_wins,
     weekly_reset,
+    force_reset,  # Add this import
 )
 
 intents = discord.Intents.default()
@@ -34,14 +35,15 @@ def start_bot():
     client.tree.add_command(balance.balance)
     client.tree.add_command(coinflip.coinflip)
     client.tree.add_command(slot.slot)
-    client.tree.add_command(roulette.roulette)  # Add this line
+    client.tree.add_command(roulette.roulette)
     client.tree.add_command(leaderboard.leaderboard)
     client.tree.add_command(hall_of_fame.hall_of_fame)
     client.tree.add_command(next_reset.next_reset)
     client.tree.add_command(weekly_limit.limit)
     client.tree.add_command(my_wins.my_wins)
-
-    # Force the weekly_reset module to register its command
-    weekly_task = weekly_reset.start(client)  # This registers the forcereset command
+    client.tree.add_command(force_reset.force_reset)  # Add this line
+    
+    # Start weekly reset task
+    weekly_task = weekly_reset.start(client)
     
     client.run(os.getenv("DISCORD_TOKEN"))
