@@ -1,6 +1,6 @@
 import discord
 from discord import Interaction,app_commands
-from bot.db.user import get_user, update_user_points, check_weekly_limit
+from bot.db.user import get_user, update_user_points
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import random
 
@@ -49,14 +49,12 @@ async def roulette(interaction: Interaction, amount: int, bet_type: str, number:
             return
 
     user_id = str(interaction.user.id)
-    
-    # Check weekly limit
-    can_bet, reason = await check_weekly_limit(user_id, amount)
-    if not can_bet:
-        await interaction.response.send_message(reason, ephemeral=True)
-        return
-
     user = await get_user(user_id)
+    
+    # Simple balance check
+    if user["points"] < amount:
+        await interaction.response.send_message(f"You don't have enough points. Your balance: {user['points']}", ephemeral=True)
+        return
     
     # Spin the wheel
     winning_number = random.randint(0, 36)
