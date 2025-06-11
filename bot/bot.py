@@ -25,9 +25,10 @@ client = commands.Bot(command_prefix="!", intents=intents)
 def start_bot():
     @client.event
     async def on_ready():
-        await client.tree.sync()
         print(f"Logged in as {client.user}")
         weekly_reset.start(client)
+        # Move the sync here - after all commands are registered
+        await client.tree.sync()
 
     # Register all commands
     client.tree.add_command(balance.balance)
@@ -40,4 +41,7 @@ def start_bot():
     client.tree.add_command(weekly_limit.limit)
     client.tree.add_command(my_wins.my_wins)
 
+    # Force the weekly_reset module to register its command
+    weekly_task = weekly_reset.start(client)  # This registers the forcereset command
+    
     client.run(os.getenv("DISCORD_TOKEN"))
