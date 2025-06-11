@@ -16,7 +16,8 @@ from bot.commands import (
     my_wins,
     weekly_reset,
     force_reset,
-    give,  # Add this import
+    give,
+    dice,
 )
 
 intents = discord.Intents.default()
@@ -43,6 +44,7 @@ def start_bot():
     client.tree.add_command(my_wins.my_wins)
     client.tree.add_command(force_reset.force_reset)
     client.tree.add_command(give.give)  # Add this line
+    client.tree.add_command(dice.dice)  # Add this line
     
     # Start weekly reset task
     weekly_task = weekly_reset.start(client)

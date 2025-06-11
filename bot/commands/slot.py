@@ -1,22 +1,22 @@
 import discord
 from discord import Interaction,app_commands
-from bot.db.user import get_user, update_user_points, check_weekly_limit
+from bot.db.user import get_user, update_user_points
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 import random
 
 @app_commands.command(name="slot", description="Spin the slot machine and try your luck!")
 @app_commands.describe(
-    amount="Amount to bet per machine (max 50)",
+    amount="Amount to bet per machine (max 1000)",
     machines="Number of machines to play (default: 1)"
 )
 async def slot(interaction: Interaction, amount: int, machines: int = 1):
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return
 
-    if amount > 50 or amount <= 0:
-        await interaction.response.send_message("You can only bet between 1 and 50 points per machine.", ephemeral=True)
+    if amount > 1000 or amount <= 0:
+        await interaction.response.send_message("You can only bet between 1 and 1000 points per machine.", ephemeral=True)
         return
-        
+
     if machines <= 0:
         await interaction.response.send_message("You must play at least 1 machine.", ephemeral=True)
         return
@@ -37,10 +37,7 @@ async def slot(interaction: Interaction, amount: int, machines: int = 1):
         machines_message = ""
 
     total_bet = amount * affordable_machines
-    can_bet, reason = await check_weekly_limit(user_id, total_bet)
-    if not can_bet:
-        await interaction.response.send_message(reason, ephemeral=True)
-        return
+    # Weekly limit check removed, only balance check above
 
     # Run each machine
     symbols = ["🍒", "🍋", "🍇", "💎", "🔔"]
