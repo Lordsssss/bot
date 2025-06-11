@@ -1,7 +1,7 @@
 import os
 import discord
 from discord.ext import commands
-from discord import Interaction,app_commands
+from discord import Interaction, app_commands
 
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 from bot.commands import (
@@ -15,7 +15,8 @@ from bot.commands import (
     weekly_limit,
     my_wins,
     weekly_reset,
-    force_reset,  # Add this import
+    force_reset,
+    give,  # Add this import
 )
 
 intents = discord.Intents.default()
@@ -28,7 +29,6 @@ def start_bot():
     async def on_ready():
         print(f"Logged in as {client.user}")
         weekly_reset.start(client)
-        # Move the sync here - after all commands are registered
         await client.tree.sync()
 
     # Register all commands
@@ -41,7 +41,8 @@ def start_bot():
     client.tree.add_command(next_reset.next_reset)
     client.tree.add_command(weekly_limit.limit)
     client.tree.add_command(my_wins.my_wins)
-    client.tree.add_command(force_reset.force_reset)  # Add this line
+    client.tree.add_command(force_reset.force_reset)
+    client.tree.add_command(give.give)  # Add this line
     
     # Start weekly reset task
     weekly_task = weekly_reset.start(client)
