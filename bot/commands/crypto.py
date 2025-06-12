@@ -9,6 +9,7 @@ from bot.crypto.models import CryptoModels
 from bot.crypto.portfolio import PortfolioManager
 from bot.crypto.constants import CRYPTO_COINS, TRANSACTION_FEE
 from bot.utils.constants import ALLOWED_CHANNEL_ID
+import math
 
 # Prices command
 @app_commands.describe()
@@ -57,7 +58,7 @@ async def crypto_prices(interaction: Interaction):
     except Exception as e:
         await interaction.followup.send(f"❌ Error fetching prices: {str(e)}")
 
-# Chart command
+# Chart command (single crypto)
 @app_commands.describe(ticker="Crypto ticker symbol (e.g., DOGE2, MEME)")
 async def crypto_chart(interaction: Interaction, ticker: str):
     """View price chart for a specific crypto"""
@@ -159,6 +160,175 @@ async def crypto_chart(interaction: Interaction, ticker: str):
         
     except Exception as e:
         await interaction.followup.send(f"❌ Error generating chart: {str(e)}")
+
+# Multiple charts command (NEW)
+@app_commands.describe(
+    tickers="Comma-separated crypto tickers (e.g., 'DOGE2,MEME,BTC') or 'all' for all cryptos"
+)
+async def crypto_charts(interaction: Interaction, tickers: str):
+    """View price charts for multiple cryptos at once"""
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        await interaction.response.send_message("❌ This command can only be used in the designated channel!", ephemeral=True)
+        return
+    
+    try:
+        await interaction.response.defer()
+        
+        # Parse tickers
+        if tickers.lower().strip() == 'all':
+            target_tickers = list(CRYPTO_COINS.keys())
+        else:
+            target_tickers = [t.strip().upper() for t in tickers.split(',')]
+            # Validate tickers
+            invalid_tickers = [t for t in target_tickers if t not in CRYPTO_COINS]
+            if invalid_tickers:
+                available_tickers = list(CRYPTO_COINS.keys())
+                await interaction.followup.send(f"❌ Invalid tickers: {', '.join(invalid_tickers)}\nAvailable: {', '.join(available_tickers)}")
+                return
+        
+        # Limit to prevent overwhelming
+        if len(target_tickers) > 6:
+            await interaction.followup.send("❌ Maximum 6 charts at once! Use 'all' for all cryptos or specify up to 6 tickers.")
+            return
+        
+        # Collect data for all requested tickers
+        chart_data = {}
+        valid_tickers = []
+        
+        for ticker in target_tickers:
+            coin = await CryptoModels.get_coin(ticker)
+            if not coin:
+                continue
+                
+            price_history = await CryptoModels.get_price_history(ticker, hours=2)
+            if len(price_history) < 2:
+                continue
+                
+            chart_data[ticker] = {
+                'coin': coin,
+                'history': price_history,
+                'times': [p['timestamp'] for p in price_history],
+                'prices': [p['price'] for p in price_history]
+            }
+            valid_tickers.append(ticker)
+        
+        if not valid_tickers:
+            await interaction.followup.send("❌ No valid chart data available for the requested cryptos!")
+            return
+        
+        # Create multi-chart layout
+        plt.style.use('dark_background')
+        
+        # Calculate grid layout
+        num_charts = len(valid_tickers)
+        if num_charts == 1:
+            rows, cols = 1, 1
+            figsize = (12, 6)
+        elif num_charts == 2:
+            rows, cols = 1, 2
+            figsize = (20, 8)
+        elif num_charts <= 4:
+            rows, cols = 2, 2
+            figsize = (20, 12)
+        else:  # 5-6 charts
+            rows, cols = 2, 3
+            figsize = (24, 12)
+        
+        fig, axes = plt.subplots(rows, cols, figsize=figsize)
+        if num_charts == 1:
+            axes = [axes]
+        elif rows == 1 or cols == 1:
+            axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+        else:
+            axes = axes.flatten()
+        
+        # Plot each chart
+        colors = ['#00ff00', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b']
+        
+        for i, ticker in enumerate(valid_tickers):
+            ax = axes[i]
+            data = chart_data[ticker]
+            color = colors[i % len(colors)]
+            
+            # Plot the line
+            ax.plot(data['times'], data['prices'], color=color, linewidth=2, marker='o', markersize=2)
+            
+            # Styling
+            coin_name = data['coin']['name']
+            ax.set_title(f"{coin_name} ({ticker})", fontsize=12, color='white', pad=10)
+            ax.set_xlabel('Time', fontsize=10, color='white')
+            ax.set_ylabel('Price ($)', fontsize=10, color='white')
+            
+            # Format x-axis
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=30))
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            ax.tick_params(axis='y', labelsize=8)
+            
+            # Grid
+            ax.grid(True, alpha=0.3, color='gray')
+            
+            # Current price annotation
+            current_price = data['coin']['current_price']
+            ax.annotate(f'${current_price:.4f}', 
+                       xy=(data['times'][-1], data['prices'][-1]), 
+                       xytext=(5, 5), 
+                       textcoords='offset points',
+                       bbox=dict(boxstyle='round,pad=0.3', fc='yellow', alpha=0.8),
+                       fontsize=8, color='black', weight='bold')
+            
+            # Calculate price change
+            price_change = data['prices'][-1] - data['prices'][0]
+            price_change_percent = (price_change / data['prices'][0]) * 100
+            
+            # Add mini stats
+            stats_text = f"${current_price:.4f}\n{price_change_percent:+.1f}%"
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='black', alpha=0.7),
+                    fontsize=8, color='white')
+        
+        # Hide unused subplots
+        for i in range(num_charts, len(axes)):
+            axes[i].set_visible(False)
+        
+        plt.tight_layout()
+        
+        # Save to bytes
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png', facecolor='#2f3136', dpi=100, bbox_inches='tight')
+        img_buffer.seek(0)
+        plt.close()
+        
+        # Create summary embed
+        embed = discord.Embed(
+            title="📊 Multi-Crypto Chart Overview",
+            description=f"Price charts for {len(valid_tickers)} cryptocurrencies",
+            color=0x00ff00,
+            timestamp=datetime.utcnow()
+        )
+        
+        # Add summary stats
+        summary_text = ""
+        for ticker in valid_tickers:
+            data = chart_data[ticker]
+            current_price = data['coin']['current_price']
+            price_change = data['prices'][-1] - data['prices'][0]
+            price_change_percent = (price_change / data['prices'][0]) * 100
+            
+            change_emoji = "📈" if price_change >= 0 else "📉"
+            summary_text += f"{change_emoji} **{ticker}**: ${current_price:.4f} ({price_change_percent:+.2f}%)\n"
+        
+        embed.add_field(name="Current Prices & Changes", value=summary_text, inline=False)
+        embed.set_footer(text="Charts show last 2 hours of trading data")
+        
+        # Send the chart
+        file = discord.File(img_buffer, filename=f"multi_crypto_chart.png")
+        embed.set_image(url="attachment://multi_crypto_chart.png")
+        
+        await interaction.followup.send(embed=embed, file=file)
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error generating charts: {str(e)}")
 
 # Buy command
 @app_commands.describe(

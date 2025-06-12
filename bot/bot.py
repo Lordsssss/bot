@@ -65,6 +65,7 @@ def start_bot():
     crypto_group = app_commands.Group(name="crypto", description="Cryptocurrency trading commands")
     crypto_group.add_command(app_commands.Command(name="prices", callback=crypto.crypto_prices, description="View current crypto prices"))
     crypto_group.add_command(app_commands.Command(name="chart", callback=crypto.crypto_chart, description="View price chart for a specific crypto"))
+    crypto_group.add_command(app_commands.Command(name="charts", callback=crypto.crypto_charts, description="View charts for multiple cryptos at once"))
     crypto_group.add_command(app_commands.Command(name="buy", callback=crypto.crypto_buy, description="Buy cryptocurrency with your points"))
     crypto_group.add_command(app_commands.Command(name="sell", callback=crypto.crypto_sell, description="Sell cryptocurrency for points"))
     crypto_group.add_command(app_commands.Command(name="portfolio", callback=crypto.crypto_portfolio, description="View your crypto portfolio"))
