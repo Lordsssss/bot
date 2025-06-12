@@ -58,10 +58,9 @@ async def crypto_prices(interaction: Interaction):
     except Exception as e:
         await interaction.followup.send(f"❌ Error fetching prices: {str(e)}")
 
-
-@app_commands.describe(ticker="Crypto ticker symbol(s) - separate multiple with commas (e.g., DOGE2,MEME,BTC)")
+@app_commands.describe(ticker="Crypto ticker(s) - single (DOGE2), multiple (DOGE2,MEME), or 'all' for all cryptos")
 async def crypto_charts(interaction: Interaction, ticker: str):
-    """View price chart for one or more cryptos (superposed)"""
+    """View price chart for one, multiple, or all cryptos (superposed)"""
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         await interaction.response.send_message("❌ This command can only be used in the designated channel!", ephemeral=True)
         return
@@ -69,35 +68,52 @@ async def crypto_charts(interaction: Interaction, ticker: str):
     try:
         await interaction.response.defer()
         
-        # Parse multiple tickers
-        tickers = [t.strip().upper() for t in ticker.split(',')]
-        tickers = tickers[:5]  # Limit to 5 tickers max
+        # Handle 'all' case
+        if ticker.lower().strip() == 'all':
+            # Get all available cryptos
+            all_coins = await CryptoModels.get_all_coins()
+            if not all_coins:
+                await interaction.followup.send("❌ No crypto data available!")
+                return
+            tickers = [coin['ticker'] for coin in all_coins]
+        else:
+            # Parse multiple tickers or single ticker
+            tickers = [t.strip().upper() for t in ticker.split(',')]
+        
+        # Limit to prevent chart overcrowding (max 10 for 'all', unlimited for manual selection)
+        if ticker.lower().strip() == 'all':
+            tickers = tickers[:10]  # Limit 'all' to 10 most recent
         
         # Validate all tickers exist
         valid_tickers = []
+        coin_data = {}
         for t in tickers:
             coin = await CryptoModels.get_coin(t)
             if coin:
                 valid_tickers.append(t)
+                coin_data[t] = coin
         
         if not valid_tickers:
-            available_tickers = list(CRYPTO_COINS.keys())
-            await interaction.followup.send(f"❌ No valid cryptos found!\nAvailable: {', '.join(available_tickers)}")
+            if ticker.lower().strip() == 'all':
+                await interaction.followup.send("❌ No crypto data available!")
+            else:
+                available_tickers = list(CRYPTO_COINS.keys())
+                await interaction.followup.send(f"❌ No valid cryptos found!\nAvailable: {', '.join(available_tickers)}")
             return
         
         # Create the chart
         plt.style.use('dark_background')
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(14, 8))  # Slightly larger for multiple lines
         
-        # Colors for different lines
-        colors = ['#00ff00', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24']
+        # Colors for different lines (expanded palette)
+        colors = ['#00ff00', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', 
+                 '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43',
+                 '#ff6348', '#2ed573', '#3742fa', '#f368e0', '#feca57']
         
         chart_data = {}
-        all_times = set()
         
         # Get data for each ticker
         for i, t in enumerate(valid_tickers):
-            coin = await CryptoModels.get_coin(t)
             price_history = await CryptoModels.get_price_history(t, hours=2)
             
             if len(price_history) < 2:
@@ -106,20 +122,24 @@ async def crypto_charts(interaction: Interaction, ticker: str):
             times = [p['timestamp'] for p in price_history]
             prices = [p['price'] for p in price_history]
             
-            # Normalize prices to show relative performance (optional)
-            # If you want actual prices instead of relative, remove this normalization
-            base_price = prices[0]
-            normalized_prices = [(p / base_price - 1) * 100 for p in prices]  # Percentage change
+            # For single crypto, show actual prices. For multiple, show percentage change
+            if len(valid_tickers) == 1:
+                # Single crypto - use actual prices
+                plot_values = prices
+                ylabel = 'Price ($)'
+            else:
+                # Multiple cryptos - normalize to percentage change for comparison
+                base_price = prices[0]
+                plot_values = [(p / base_price - 1) * 100 for p in prices]
+                ylabel = 'Price Change (%)'
             
             chart_data[t] = {
                 'times': times,
                 'prices': prices,
-                'normalized': normalized_prices,
-                'coin': coin,
+                'plot_values': plot_values,
+                'coin': coin_data[t],
                 'color': colors[i % len(colors)]
             }
-            
-            all_times.update(times)
         
         if not chart_data:
             await interaction.followup.send("❌ Not enough price data yet. Try again in a few minutes!")
@@ -127,41 +147,93 @@ async def crypto_charts(interaction: Interaction, ticker: str):
         
         # Plot all lines superposed
         for t, data in chart_data.items():
-            # Plot normalized percentage change for better comparison
-            ax.plot(data['times'], data['normalized'], 
-                   color=data['color'], linewidth=2, marker='o', markersize=2, 
-                   label=f"{t} ({data['coin']['name']})", alpha=0.8)
+            ax.plot(data['times'], data['plot_values'], 
+                   color=data['color'], linewidth=2, marker='o' if len(valid_tickers) == 1 else '.', 
+                   markersize=3 if len(valid_tickers) == 1 else 1,
+                   label=f"{t}" if len(valid_tickers) > 1 else f"{t} ({data['coin']['name']})", 
+                   alpha=0.9)
         
-        # Styling
-        title = f"Crypto Price Comparison - {', '.join(valid_tickers)}"
-        if len(title) > 50:
-            title = f"Crypto Comparison ({len(valid_tickers)} coins)"
+        # Dynamic title based on number of cryptos
+        if len(valid_tickers) == 1:
+            title = f"{coin_data[valid_tickers[0]]['name']} ({valid_tickers[0]}) - Price Chart"
+        elif ticker.lower().strip() == 'all':
+            title = f"All Crypto Comparison ({len(valid_tickers)} coins)"
+        else:
+            title = f"Crypto Comparison - {', '.join(valid_tickers)}" if len(', '.join(valid_tickers)) <= 40 else f"Crypto Comparison ({len(valid_tickers)} coins)"
         
         ax.set_title(title, fontsize=16, color='white', pad=20)
         ax.set_xlabel('Time', fontsize=12, color='white')
-        ax.set_ylabel('Price Change (%)', fontsize=12, color='white')
+        ax.set_ylabel(ylabel, fontsize=12, color='white')
         
         # Format x-axis
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
         ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
         plt.xticks(rotation=45)
         
-        # Grid and legend
+        # Grid
         ax.grid(True, alpha=0.3, color='gray')
-        ax.legend(loc='upper left', fontsize=10)
         
-        # Add horizontal line at 0%
-        ax.axhline(y=0, color='white', linestyle='--', alpha=0.5)
+        # Legend and horizontal line (only for multiple cryptos)
+        if len(valid_tickers) > 1:
+            ax.legend(loc='upper left', fontsize=9, ncol=2 if len(valid_tickers) > 6 else 1)
+            ax.axhline(y=0, color='white', linestyle='--', alpha=0.5)
+        
+        # Special annotation for single crypto
+        if len(valid_tickers) == 1:
+            t = valid_tickers[0]
+            data = chart_data[t]
+            current_price = data['coin']['current_price']
+            
+            # Current price annotation
+            ax.annotate(f'${current_price:.4f}', 
+                       xy=(data['times'][-1], data['prices'][-1]), 
+                       xytext=(10, 10), 
+                       textcoords='offset points',
+                       bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.8),
+                       arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
+                       fontsize=12, color='black', weight='bold')
         
         # Stats text box
-        stats_text = "Current Prices:\n"
-        for t, data in chart_data.items():
+        if len(valid_tickers) == 1:
+            # Detailed stats for single crypto
+            t = valid_tickers[0]
+            data = chart_data[t]
             current_price = data['coin']['current_price']
-            change_pct = data['normalized'][-1]
-            stats_text += f"{t}: ${current_price:.4f} ({change_pct:+.2f}%)\n"
+            price_change = data['prices'][-1] - data['prices'][0]
+            price_change_percent = (price_change / data['prices'][0]) * 100
+            
+            stats_text = f"Current: ${current_price:.4f}\n"
+            stats_text += f"Change: {price_change:+.4f} ({price_change_percent:+.2f}%)\n"
+            stats_text += f"High: ${max(data['prices']):.4f}\n"
+            stats_text += f"Low: ${min(data['prices']):.4f}\n"
+            stats_text += f"Volatility: {data['coin']['daily_volatility']:.2f}"
+        else:
+            # Summary stats for multiple cryptos
+            stats_text = "Current Status:\n"
+            # Sort by performance for the stats box
+            performance_data = []
+            for t, data in chart_data.items():
+                current_price = data['coin']['current_price']
+                change_pct = data['plot_values'][-1]
+                performance_data.append((t, current_price, change_pct))
+            
+            # Sort by performance (best first)
+            performance_data.sort(key=lambda x: x[2], reverse=True)
+            
+            # Show top performers (limit to 8 lines in stats box)
+            for t, current_price, change_pct in performance_data[:8]:
+                stats_text += f"{t}: ${current_price:.4f} ({change_pct:+.2f}%)\n"
+            
+            if len(performance_data) > 8:
+                stats_text += f"... and {len(performance_data) - 8} more"
         
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
-                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='black', alpha=0.8),
+        # Position stats box
+        box_x = 0.02 if len(valid_tickers) == 1 else 0.98
+        box_ha = 'left' if len(valid_tickers) == 1 else 'right'
+        
+        ax.text(box_x, 0.98, stats_text, transform=ax.transAxes, 
+                verticalalignment='top', horizontalalignment=box_ha,
+                bbox=dict(boxstyle='round', facecolor='black', alpha=0.8),
                 fontsize=9, color='white')
         
         plt.tight_layout()
@@ -173,33 +245,62 @@ async def crypto_charts(interaction: Interaction, ticker: str):
         plt.close()
         
         # Send the chart
-        file = discord.File(img_buffer, filename=f"crypto_comparison_chart.png")
+        filename = f"{valid_tickers[0]}_chart.png" if len(valid_tickers) == 1 else "crypto_comparison_chart.png"
+        file = discord.File(img_buffer, filename=filename)
         
-        # Create embed with summary
-        embed_color = 0x00ff00  # Default green
-        description = f"**Comparing {len(valid_tickers)} cryptocurrencies**\n\n"
-        
-        for t, data in chart_data.items():
+        # Create embed
+        if len(valid_tickers) == 1:
+            # Single crypto embed
+            t = valid_tickers[0]
+            data = chart_data[t]
             current_price = data['coin']['current_price']
-            change_pct = data['normalized'][-1]
-            description += f"**{t}:** ${current_price:.4f} ({change_pct:+.2f}%)\n"
+            price_change = data['prices'][-1] - data['prices'][0]
+            price_change_percent = (price_change / data['prices'][0]) * 100
+            
+            embed = discord.Embed(
+                title=f"📈 {data['coin']['name']} ({t})",
+                description=f"**Current Price:** ${current_price:.4f}\n"
+                           f"**Change:** {price_change:+.4f} ({price_change_percent:+.2f}%)\n"
+                           f"**Volatility:** {data['coin']['daily_volatility']:.2f}",
+                color=0x00ff00 if price_change >= 0 else 0xff0000,
+                timestamp=datetime.utcnow()
+            )
+            embed.set_footer(text="Chart shows last 2 hours of trading data")
+        else:
+            # Multiple cryptos embed
+            embed_color = 0x00ff00  # Default green
+            description = f"**Comparing {len(valid_tickers)} cryptocurrencies**\n\n"
+            
+            # Show top 5 performers in embed
+            performance_data = []
+            for t, data in chart_data.items():
+                current_price = data['coin']['current_price']
+                change_pct = data['plot_values'][-1]
+                performance_data.append((t, current_price, change_pct))
+            
+            performance_data.sort(key=lambda x: x[2], reverse=True)
+            
+            for t, current_price, change_pct in performance_data[:5]:
+                description += f"**{t}:** ${current_price:.4f} ({change_pct:+.2f}%)\n"
+            
+            if len(performance_data) > 5:
+                description += f"\n*... and {len(performance_data) - 5} more cryptos*"
+            
+            embed = discord.Embed(
+                title=f"📈 Crypto Comparison Chart",
+                description=description,
+                color=embed_color,
+                timestamp=datetime.utcnow()
+            )
+            embed.set_footer(text="Chart shows percentage change over last 2 hours | All lines superposed for comparison")
         
-        embed = discord.Embed(
-            title=f"📈 Crypto Comparison Chart",
-            description=description,
-            color=embed_color,
-            timestamp=datetime.utcnow()
-        )
-        
-        embed.set_image(url=f"attachment://crypto_comparison_chart.png")
-        embed.set_footer(text="Chart shows percentage change over last 2 hours | Lines are superposed for easy comparison")
+        embed.set_image(url=f"attachment://{filename}")
         
         await interaction.followup.send(embed=embed, file=file)
         
     except Exception as e:
         await interaction.followup.send(f"❌ Error generating chart: {str(e)}")
 
-        
 # Buy command
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
