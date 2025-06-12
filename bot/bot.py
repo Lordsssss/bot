@@ -61,5 +61,17 @@ def start_bot():
     client.tree.add_command(give.give)
     client.tree.add_command(dice.dice)
     
-    # Register crypto commands
+    # Register crypto commands - ADD THESE LINES
+    crypto_group = app_commands.Group(name="crypto", description="Cryptocurrency trading commands")
+    crypto_group.add_command(app_commands.Command(name="prices", callback=crypto.crypto_prices, description="View current crypto prices"))
+    crypto_group.add_command(app_commands.Command(name="chart", callback=crypto.crypto_chart, description="View price chart for a specific crypto"))
+    crypto_group.add_command(app_commands.Command(name="buy", callback=crypto.crypto_buy, description="Buy cryptocurrency with your points"))
+    crypto_group.add_command(app_commands.Command(name="sell", callback=crypto.crypto_sell, description="Sell cryptocurrency for points"))
+    crypto_group.add_command(app_commands.Command(name="portfolio", callback=crypto.crypto_portfolio, description="View your crypto portfolio"))
+    crypto_group.add_command(app_commands.Command(name="leaderboard", callback=crypto.crypto_leaderboard, description="View crypto trading leaderboard"))
+    crypto_group.add_command(app_commands.Command(name="history", callback=crypto.crypto_history, description="View your recent crypto transactions"))
+    
+    client.tree.add_command(crypto_group)
+    
+    # Run the bot
     client.run(os.getenv("DISCORD_TOKEN"))
