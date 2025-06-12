@@ -18,7 +18,11 @@ from bot.commands import (
     force_reset,
     give,
     dice,
+    crypto,  # Import crypto commands
 )
+
+# Import crypto manager
+from bot.crypto.manager import CryptoManager
 
 intents = discord.Intents.default()
 intents.members = True
@@ -29,10 +33,21 @@ def start_bot():
     @client.event
     async def on_ready():
         print(f"Logged in as {client.user}")
+        
+        # Start weekly reset task
         weekly_reset.start(client)
+        
+        # Initialize and start crypto trading system
+        crypto_manager = CryptoManager(client)
+        await crypto_manager.start()
+        
+        # Store crypto manager in client for later access
+        client.crypto_manager = crypto_manager
+        
+        # Sync commands
         await client.tree.sync()
 
-    # Register all commands
+    # Register all existing commands
     client.tree.add_command(balance.balance)
     client.tree.add_command(coinflip.coinflip)
     client.tree.add_command(slot.slot)
@@ -43,10 +58,8 @@ def start_bot():
     client.tree.add_command(weekly_limit.limit)
     client.tree.add_command(my_wins.my_wins)
     client.tree.add_command(force_reset.force_reset)
-    client.tree.add_command(give.give)  # Add this line
-    client.tree.add_command(dice.dice)  # Add this line
+    client.tree.add_command(give.give)
+    client.tree.add_command(dice.dice)
     
-    # Start weekly reset task
-    weekly_task = weekly_reset.start(client)
-    
+    # Register crypto commands
     client.run(os.getenv("DISCORD_TOKEN"))
