@@ -8,7 +8,7 @@ from bot.db.user import get_user
 from bot.crypto.models import CryptoModels
 from bot.crypto.portfolio import PortfolioManager
 from bot.crypto.constants import CRYPTO_COINS, TRANSACTION_FEE
-from bot.utils.constants import ALLOWED_CHANNEL_ID, ADMIN_USER_IDS
+from bot.utils.constants import ALLOWED_CHANNEL_ID, ADMIN_ROLE_ID
 import math
 
 # Prices command
@@ -661,9 +661,9 @@ async def crypto_admin_event(interaction: Interaction, event_type: str, target_c
         await interaction.response.send_message("❌ This command can only be used in the designated channel!", ephemeral=True)
         return
     
-    # Check if user is admin
-    if interaction.user.id not in ADMIN_USER_IDS:
-        await interaction.response.send_message("❌ This command is for administrators only!", ephemeral=True)
+    # Check if user has admin role
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message("❌ This command requires the 'spy' role!", ephemeral=True)
         return
     
     try:
