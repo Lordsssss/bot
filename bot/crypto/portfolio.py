@@ -36,8 +36,8 @@ class PortfolioManager:
             fee = amount_to_spend * TRANSACTION_FEE
             amount_after_fee = amount_to_spend - fee
             
-            # Calculate how many coins user gets
-            coins_received = amount_after_fee / current_price
+            # Calculate how many coins user gets (rounded to 3 decimal places)
+            coins_received = round(amount_after_fee / current_price, 3)
             
             # Update user's points (deduct the spent amount)
             await update_user_points(user_id, -amount_to_spend)
@@ -63,7 +63,7 @@ class PortfolioManager:
             
             return {
                 "success": True,
-                "message": f"Successfully bought {coins_received:.6f} {ticker} for {amount_to_spend} points!",
+                "message": f"Successfully bought {coins_received:.3f} {ticker} for {amount_to_spend} points!",
                 "details": {
                     "coins_received": coins_received,
                     "price_per_coin": current_price,
@@ -95,7 +95,7 @@ class PortfolioManager:
             if current_holding < amount_to_sell:
                 return {
                     "success": False,
-                    "message": f"Insufficient {ticker}! You have {current_holding:.6f} but want to sell {amount_to_sell}."
+                    "message": f"Insufficient {ticker}! You have {current_holding:.3f} but want to sell {amount_to_sell}."
                 }
             
             # Get coin data
@@ -159,6 +159,102 @@ class PortfolioManager:
             }
     
     @staticmethod
+    async def sell_all_crypto(user_id: str) -> dict:
+        """
+        Sell all cryptocurrency holdings for points
+        Returns: dict with success status and details
+        """
+        try:
+            # Get user's portfolio
+            portfolio = await CryptoModels.get_user_portfolio(user_id)
+            holdings = portfolio.get("holdings", {})
+            
+            if not holdings or all(amount <= 0 for amount in holdings.values()):
+                return {
+                    "success": False,
+                    "message": "No crypto holdings to sell!"
+                }
+            
+            total_sale_value = 0
+            total_fee = 0
+            sold_coins = []
+            
+            # Sell each holding
+            for ticker, amount in holdings.items():
+                if amount > 0:  # Only sell positive holdings
+                    # Get coin data
+                    coin = await CryptoModels.get_coin(ticker)
+                    if not coin:
+                        continue
+                    
+                    current_price = coin["current_price"]
+                    
+                    # Calculate sale value
+                    gross_sale_value = amount * current_price
+                    fee = gross_sale_value * TRANSACTION_FEE
+                    net_sale_value = gross_sale_value - fee
+                    
+                    total_sale_value += net_sale_value
+                    total_fee += fee
+                    
+                    # Update user's portfolio (remove all coins)
+                    await CryptoModels.update_portfolio(
+                        user_id=user_id,
+                        ticker=ticker,
+                        amount=-amount,
+                        invested_change=-net_sale_value
+                    )
+                    
+                    # Record transaction
+                    await CryptoModels.record_transaction(
+                        user_id=user_id,
+                        ticker=ticker,
+                        transaction_type="sell",
+                        amount=amount,
+                        price=current_price,
+                        total_cost=net_sale_value,
+                        fee=fee
+                    )
+                    
+                    sold_coins.append({
+                        "ticker": ticker,
+                        "amount": round(amount, 3),
+                        "price": current_price,
+                        "value": net_sale_value
+                    })
+            
+            if not sold_coins:
+                return {
+                    "success": False,
+                    "message": "No valid crypto holdings found to sell!"
+                }
+            
+            # Update user's points (add the sale proceeds)
+            await update_user_points(user_id, total_sale_value)
+            
+            # Get updated user points
+            updated_user = await get_user(user_id)
+            new_points = updated_user.get("points", 0)
+            
+            return {
+                "success": True,
+                "message": f"Successfully sold all crypto for {total_sale_value:.2f} points!",
+                "details": {
+                    "total_value": total_sale_value,
+                    "total_fee": total_fee,
+                    "coins_sold": len(sold_coins),
+                    "new_points": new_points,
+                    "sold_holdings": sold_coins
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error selling all crypto: {str(e)}"
+            }
+    
+    @staticmethod
     async def get_portfolio_value(user_id: str) -> dict:
         """
         Calculate current portfolio value
@@ -191,7 +287,7 @@ class PortfolioManager:
                         total_current_value += holding_value
                         
                         detailed_holdings[ticker] = {
-                            "amount": amount,
+                            "amount": round(amount, 3),
                             "current_price": current_price,
                             "value": holding_value,
                             "coin_name": coin["name"]

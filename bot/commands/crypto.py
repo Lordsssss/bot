@@ -8,7 +8,7 @@ from bot.db.user import get_user
 from bot.crypto.models import CryptoModels
 from bot.crypto.portfolio import PortfolioManager
 from bot.crypto.constants import CRYPTO_COINS, TRANSACTION_FEE
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.constants import ALLOWED_CHANNEL_ID, ADMIN_USER_IDS
 import math
 
 # Prices command
@@ -347,7 +347,7 @@ async def crypto_buy(interaction: Interaction, ticker: str, amount: float):
             details = result["details"]
             embed.add_field(
                 name="Transaction Details",
-                value=f"**Coins Received:** {details['coins_received']:.6f} {ticker}\n"
+                value=f"**Coins Received:** {details['coins_received']:.3f} {ticker}\n"
                       f"**Price per Coin:** ${details['price_per_coin']:.4f}\n"
                       f"**Total Cost:** {details['total_cost']} points\n"
                       f"**Transaction Fee:** {details['fee']:.2f} points ({TRANSACTION_FEE*100}%)\n"
@@ -464,7 +464,7 @@ async def crypto_portfolio(interaction: Interaction):
             holdings_text = ""
             for ticker, holding in portfolio_data["holdings"].items():
                 holdings_text += f"**{ticker}** ({holding['coin_name']})\n"
-                holdings_text += f"  Amount: {holding['amount']:.6f}\n"
+                holdings_text += f"  Amount: {holding['amount']:.3f}\n"
                 holdings_text += f"  Price: ${holding['current_price']:.4f}\n"
                 holdings_text += f"  Value: {holding['value']:.2f} points\n\n"
             
@@ -540,6 +540,73 @@ async def crypto_leaderboard(interaction: Interaction):
     except Exception as e:
         await interaction.followup.send(f"❌ Error fetching leaderboard: {str(e)}")
 
+# Sell All command
+@app_commands.describe()
+async def crypto_sell_all(interaction: Interaction):
+    """Sell all your cryptocurrency holdings at once"""
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        await interaction.response.send_message("❌ This command can only be used in the designated channel!", ephemeral=True)
+        return
+    
+    try:
+        await interaction.response.defer()
+        
+        user_id = str(interaction.user.id)
+        
+        # Execute sell-all
+        result = await PortfolioManager.sell_all_crypto(user_id)
+        
+        if result["success"]:
+            embed = discord.Embed(
+                title="✅ Sell All Successful!",
+                description=result["message"],
+                color=0x00ff00,
+                timestamp=datetime.utcnow()
+            )
+            
+            details = result["details"]
+            
+            # Summary field
+            embed.add_field(
+                name="💰 Sale Summary",
+                value=f"**Total Value:** {details['total_value']:.2f} points\n"
+                      f"**Total Fee:** {details['total_fee']:.2f} points\n"
+                      f"**Coins Sold:** {details['coins_sold']} different types\n"
+                      f"**New Balance:** {details['new_points']:.2f} points",
+                inline=False
+            )
+            
+            # Detailed breakdown if not too many coins
+            if len(details['sold_holdings']) <= 8:
+                breakdown_text = ""
+                for holding in details['sold_holdings']:
+                    breakdown_text += f"**{holding['ticker']}:** {holding['amount']:.3f} @ ${holding['price']:.4f} = {holding['value']:.2f} pts\n"
+                
+                embed.add_field(
+                    name="📋 Holdings Sold",
+                    value=breakdown_text if breakdown_text else "No holdings sold",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="📋 Holdings Sold",
+                    value=f"Sold {len(details['sold_holdings'])} different cryptocurrencies\n"
+                          f"Use `/crypto history` to see detailed transaction list",
+                    inline=False
+                )
+            
+            await interaction.followup.send(embed=embed)
+        else:
+            embed = discord.Embed(
+                title="❌ Sell All Failed",
+                description=result["message"],
+                color=0xff0000
+            )
+            await interaction.followup.send(embed=embed)
+            
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error processing sell all: {str(e)}")
+
 # History command
 @app_commands.describe()
 async def crypto_history(interaction: Interaction):
@@ -572,7 +639,7 @@ async def crypto_history(interaction: Interaction):
             
             time_str = tx["timestamp"].strftime("%m/%d %H:%M")
             
-            history_text += f"{action_emoji} **{action}** {tx['amount']:.6f} {tx['ticker']}\n"
+            history_text += f"{action_emoji} **{action}** {tx['amount']:.3f} {tx['ticker']}\n"
             history_text += f"   Price: ${tx['price']:.4f} | Total: {tx['total_cost']:.2f} pts | {time_str}\n\n"
         
         embed.add_field(name="Recent Transactions", value=history_text, inline=False)
@@ -582,3 +649,145 @@ async def crypto_history(interaction: Interaction):
         
     except Exception as e:
         await interaction.followup.send(f"❌ Error fetching transaction history: {str(e)}")
+
+# Admin Event Trigger command
+@app_commands.describe(
+    event_type="Type of event to trigger (or 'random' for random event)",
+    target_coin="Specific coin to affect (optional, defaults to random)"
+)
+async def crypto_admin_event(interaction: Interaction, event_type: str, target_coin: str = None):
+    """[ADMIN ONLY] Manually trigger a market event"""
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        await interaction.response.send_message("❌ This command can only be used in the designated channel!", ephemeral=True)
+        return
+    
+    # Check if user is admin
+    if interaction.user.id not in ADMIN_USER_IDS:
+        await interaction.response.send_message("❌ This command is for administrators only!", ephemeral=True)
+        return
+    
+    try:
+        await interaction.response.defer()
+        
+        from bot.crypto.constants import MARKET_EVENTS, CRYPTO_COINS
+        import random
+        
+        # Get available event types for help
+        available_events = [
+            "hack", "elon", "regulation", "whale", "institutional", 
+            "congestion", "partnership", "burn", "fud", "botmalfunction",
+            "crash", "moon", "vulnerability", "pump", "diamond", "random"
+        ]
+        
+        event_type = event_type.lower()
+        
+        # Validate event type
+        if event_type not in available_events:
+            events_list = ", ".join(available_events)
+            await interaction.followup.send(f"❌ Invalid event type! Available: {events_list}")
+            return
+        
+        # Select event
+        if event_type == "random":
+            selected_event = random.choice(MARKET_EVENTS)
+        else:
+            # Map short names to event messages
+            event_mapping = {
+                "hack": "🚨 BREAKING: Major exchange gets hacked!",
+                "elon": "📈 Elon Musk tweets about crypto!",
+                "regulation": "🏛️ Government announces crypto regulation!",
+                "whale": "🐋 Whale alert: Large transaction detected!",
+                "institutional": "📊 Institutional investor enters the market!",
+                "congestion": "⚡ Network congestion causes delays!",
+                "partnership": "🎉 New partnership announced!",
+                "burn": "🔥 Token burn event scheduled!",
+                "fud": "😱 FUD spreads on social media!",
+                "botmalfunction": "🤖 Trading bot malfunction causes chaos!",
+                "crash": "💥 Flash crash detected across markets!",
+                "moon": "🚀 Surprise moon mission announcement!",
+                "vulnerability": "⚠️ Major security vulnerability discovered!",
+                "pump": "🎯 Pump and dump scheme exposed!",
+                "diamond": "💎 Diamond hands movement trending!"
+            }
+            
+            target_message = event_mapping.get(event_type)
+            if not target_message:
+                await interaction.followup.send(f"❌ Event mapping not found for: {event_type}")
+                return
+            
+            # Find the matching event
+            selected_event = None
+            for event in MARKET_EVENTS:
+                if target_message in event["message"]:
+                    selected_event = event
+                    break
+            
+            if not selected_event:
+                await interaction.followup.send(f"❌ Could not find event for: {event_type}")
+                return
+        
+        # Select target coin
+        if target_coin:
+            target_coin = target_coin.upper()
+            if target_coin not in CRYPTO_COINS:
+                available_coins = ", ".join(CRYPTO_COINS.keys())
+                await interaction.followup.send(f"❌ Invalid coin! Available: {available_coins}")
+                return
+        else:
+            target_coin = random.choice(list(CRYPTO_COINS.keys()))
+        
+        # Get current coin data
+        coin = await CryptoModels.get_coin(target_coin)
+        if not coin:
+            await interaction.followup.send(f"❌ Could not find coin data for {target_coin}")
+            return
+        
+        # Trigger the event manually
+        current_price = coin["current_price"]
+        impact = selected_event["impact"]
+        new_price = current_price * (1 + impact)
+        new_price = max(new_price, 0.001)  # Ensure price doesn't go negative
+        
+        # Update price in database
+        await CryptoModels.update_coin_price(target_coin, new_price, datetime.utcnow())
+        
+        # Record the event
+        await CryptoModels.record_market_event(
+            message=f"[ADMIN TRIGGERED] {selected_event['message']}",
+            impact=impact,
+            affected_coins=[target_coin]
+        )
+        
+        # Send notification to channel (get crypto manager from client)
+        if hasattr(interaction.client, 'crypto_manager'):
+            fake_event = {
+                "message": f"[ADMIN TRIGGERED] {selected_event['message']}",
+                "impact": impact,
+                "ticker": target_coin
+            }
+            await interaction.client.crypto_manager.send_event_notification(fake_event, coin)
+        
+        # Send confirmation to admin
+        embed = discord.Embed(
+            title="✅ Admin Event Triggered!",
+            description=f"Successfully triggered market event",
+            color=0x00ff00 if impact > 0 else 0xff0000,
+            timestamp=datetime.utcnow()
+        )
+        
+        embed.add_field(
+            name="Event Details",
+            value=f"**Event:** {selected_event['message']}\n"
+                  f"**Target Coin:** {target_coin}\n"
+                  f"**Impact:** {impact*100:+.1f}%\n"
+                  f"**Old Price:** ${current_price:.4f}\n"
+                  f"**New Price:** ${new_price:.4f}",
+            inline=False
+        )
+        
+        embed.set_footer(text="Event has been broadcast to the channel")
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error triggering event: {str(e)}", ephemeral=True)

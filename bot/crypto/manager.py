@@ -106,6 +106,9 @@ class CryptoManager:
                                 impact=event["impact"],
                                 affected_coins=[coin["ticker"]]
                             )
+                            
+                            # Send event notification to Discord channel
+                            await self.send_event_notification(event, coin)
                     
                     # Clear processed events
                     self.simulator.pending_events = []
@@ -204,3 +207,66 @@ class CryptoManager:
         except Exception as e:
             print(f"❌ Error getting recent events: {e}")
             return []
+    
+    async def send_event_notification(self, event, coin):
+        """Send market event notification to Discord channel"""
+        try:
+            from bot.utils.constants import ALLOWED_CHANNEL_ID
+            import discord
+            
+            # Get the channel
+            channel = self.client.get_channel(ALLOWED_CHANNEL_ID)
+            if not channel:
+                print(f"⚠️ Channel {ALLOWED_CHANNEL_ID} not found for event notification")
+                return
+            
+            # Determine impact color and emoji
+            impact = event["impact"]
+            if impact > 0.3:
+                color = 0x00ff00  # Bright green for big pumps
+                impact_emoji = "📈🚀"
+            elif impact > 0.1:
+                color = 0x90EE90  # Light green for moderate pumps
+                impact_emoji = "📈"
+            elif impact > -0.1:
+                color = 0xffff00  # Yellow for neutral
+                impact_emoji = "➡️"
+            elif impact > -0.3:
+                color = 0xffa500  # Orange for moderate dumps
+                impact_emoji = "📉"
+            else:
+                color = 0xff0000  # Red for big crashes
+                impact_emoji = "📉💥"
+            
+            # Create embed
+            embed = discord.Embed(
+                title=f"{impact_emoji} MARKET EVENT ALERT!",
+                description=event["message"],
+                color=color,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Add affected coin info
+            current_price = coin["current_price"]
+            embed.add_field(
+                name=f"💰 {coin['ticker']} Impact",
+                value=f"**Current Price:** ${current_price:.4f}\n"
+                      f"**Expected Impact:** {impact*100:+.1f}%\n"
+                      f"**Coin:** {coin['name']}",
+                inline=False
+            )
+            
+            # Add footer with trading tip
+            if impact < -0.2:
+                embed.set_footer(text="💡 Major crash detected! Could be a buying opportunity...")
+            elif impact > 0.2:
+                embed.set_footer(text="💡 Big pump happening! Consider taking profits...")
+            else:
+                embed.set_footer(text="💡 Market movement detected. Trade wisely!")
+            
+            # Send the message
+            await channel.send(embed=embed)
+            print(f"📢 Event notification sent for {coin['ticker']}: {event['message']}")
+            
+        except Exception as e:
+            print(f"❌ Error sending event notification: {e}")

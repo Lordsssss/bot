@@ -67,9 +67,11 @@ def start_bot():
     crypto_group.add_command(app_commands.Command(name="charts", callback=crypto.crypto_charts, description="View charts for multiple cryptos at once"))
     crypto_group.add_command(app_commands.Command(name="buy", callback=crypto.crypto_buy, description="Buy cryptocurrency with your points"))
     crypto_group.add_command(app_commands.Command(name="sell", callback=crypto.crypto_sell, description="Sell cryptocurrency for points"))
+    crypto_group.add_command(app_commands.Command(name="sellall", callback=crypto.crypto_sell_all, description="Sell all your cryptocurrency holdings at once"))
     crypto_group.add_command(app_commands.Command(name="portfolio", callback=crypto.crypto_portfolio, description="View your crypto portfolio"))
     crypto_group.add_command(app_commands.Command(name="leaderboard", callback=crypto.crypto_leaderboard, description="View crypto trading leaderboard"))
     crypto_group.add_command(app_commands.Command(name="history", callback=crypto.crypto_history, description="View your recent crypto transactions"))
+    crypto_group.add_command(app_commands.Command(name="adminevent", callback=crypto.crypto_admin_event, description="[ADMIN ONLY] Manually trigger a market event"))
     
     client.tree.add_command(crypto_group)
     
