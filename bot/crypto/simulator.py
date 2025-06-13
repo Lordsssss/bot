@@ -85,24 +85,71 @@ class MarketSimulator:
         return base_momentum + volatility_momentum
     
     def check_market_events(self, ticker: str) -> float:
-        """Check if a market event should occur"""
-        # Random chance for market events
-        total_impact = 0.0
+        """Check if a market event should occur (with 10-minute cooldown)"""
+        from datetime import datetime, timedelta
         
+        # Check if enough time has passed since last event (10 minutes)
+        current_time = datetime.utcnow()
+        if (current_time - self.last_event_time).total_seconds() < 600:  # 600 seconds = 10 minutes
+            return 0.0
+        
+        # Random chance for market events (much lower probability)
         for event in MARKET_EVENTS:
             if random.random() < event["probability"]:
                 # Event occurred!
-                impact = event["impact"] * (0.5 + random.random() * 0.5)  # 50-100% of full impact
-                total_impact += impact
+                base_impact = event["impact"] * (0.8 + random.random() * 0.4)  # 80-120% of full impact
                 
-                # Record the event (async, so we'll need to handle this separately)
-                self.pending_events.append({
-                    "message": event["message"],
-                    "impact": impact,
-                    "ticker": ticker
-                })
+                # Update last event time
+                self.last_event_time = current_time
+                
+                # Handle different event scopes
+                if event["scope"] == "single":
+                    # Single coin event - affects only the current ticker
+                    self.pending_events.append({
+                        "message": event["message"],
+                        "impact": base_impact,
+                        "ticker": ticker,
+                        "scope": "single",
+                        "affected_coins": [ticker]
+                    })
+                    return base_impact
+                    
+                elif event["scope"] == "all":
+                    # Market-wide event - affects ALL coins
+                    from .constants import CRYPTO_COINS
+                    all_tickers = list(CRYPTO_COINS.keys())
+                    
+                    self.pending_events.append({
+                        "message": event["message"],
+                        "impact": base_impact,
+                        "ticker": ticker,  # Original ticker that triggered it
+                        "scope": "all",
+                        "affected_coins": all_tickers
+                    })
+                    return base_impact
+                    
+                elif event["scope"] == "random_multiple":
+                    # Affects 3-6 random coins
+                    from .constants import CRYPTO_COINS
+                    all_tickers = list(CRYPTO_COINS.keys())
+                    num_affected = random.randint(3, min(6, len(all_tickers)))
+                    affected_coins = random.sample(all_tickers, num_affected)
+                    
+                    self.pending_events.append({
+                        "message": event["message"],
+                        "impact": base_impact,
+                        "ticker": ticker,  # Original ticker that triggered it
+                        "scope": "random_multiple",
+                        "affected_coins": affected_coins
+                    })
+                    
+                    # Return impact only if current ticker is affected
+                    return base_impact if ticker in affected_coins else 0.0
+                
+                # Only allow one event per check to prevent multiple simultaneous events
+                break
         
-        return total_impact
+        return 0.0
     
     def generate_daily_volatility(self) -> float:
         """Generate daily volatility for a coin"""

@@ -775,13 +775,29 @@ async def crypto_admin_event(interaction: Interaction, event_type: str, target_c
             timestamp=datetime.utcnow()
         )
         
+        # Build event details based on scope
+        if len(affected_coins) == 1:
+            price_change = price_changes[0]
+            details_text = (f"**Event:** {selected_event['message']}\n"
+                          f"**Target Coin:** {target_coin}\n"
+                          f"**Impact:** {impact*100:+.1f}%\n"
+                          f"**Old Price:** ${price_change['old_price']:.4f}\n"
+                          f"**New Price:** ${price_change['new_price']:.4f}")
+        elif len(affected_coins) <= 5:
+            coins_list = ", ".join(affected_coins)
+            details_text = (f"**Event:** {selected_event['message']}\n"
+                          f"**Affected Coins:** {coins_list}\n"
+                          f"**Impact:** {impact*100:+.1f}% each\n"
+                          f"**Coins Updated:** {len(price_changes)}")
+        else:
+            details_text = (f"**Event:** {selected_event['message']}\n"
+                          f"**Scope:** Market-wide (ALL coins)\n"
+                          f"**Impact:** {impact*100:+.1f}% each\n"
+                          f"**Coins Updated:** {len(price_changes)}")
+        
         embed.add_field(
             name="Event Details",
-            value=f"**Event:** {selected_event['message']}\n"
-                  f"**Target Coin:** {target_coin}\n"
-                  f"**Impact:** {impact*100:+.1f}%\n"
-                  f"**Old Price:** ${current_price:.4f}\n"
-                  f"**New Price:** ${new_price:.4f}",
+            value=details_text,
             inline=False
         )
         

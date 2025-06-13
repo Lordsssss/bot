@@ -99,19 +99,36 @@ class CryptoManager:
                 
                 # Process any pending events
                 if hasattr(self.simulator, 'pending_events') and self.simulator.pending_events:
-                    for event in self.simulator.pending_events:
-                        if event["ticker"] == coin["ticker"]:
-                            await CryptoModels.record_market_event(
-                                message=event["message"],
-                                impact=event["impact"],
-                                affected_coins=[coin["ticker"]]
-                            )
-                            
-                            # Send event notification to Discord channel
-                            await self.send_event_notification(event, coin)
+                    events_to_process = self.simulator.pending_events.copy()
+                    self.simulator.pending_events = []  # Clear immediately to prevent duplication
                     
-                    # Clear processed events
-                    self.simulator.pending_events = []
+                    for event in events_to_process:
+                        # Handle multi-coin events
+                        affected_coins = event.get("affected_coins", [coin["ticker"]])
+                        
+                        # Apply the event to all affected coins
+                        for affected_ticker in affected_coins:
+                            if event["scope"] != "single" or affected_ticker == coin["ticker"]:
+                                # Get the affected coin data
+                                affected_coin = await CryptoModels.get_coin(affected_ticker)
+                                if affected_coin:
+                                    # Calculate new price for this coin
+                                    current_price = affected_coin["current_price"]
+                                    new_price = current_price * (1 + event["impact"])
+                                    new_price = max(new_price, 0.001)  # Ensure price doesn't go negative
+                                    
+                                    # Update price in database
+                                    await CryptoModels.update_coin_price(affected_ticker, new_price, current_time)
+                        
+                        # Record the event once (not per coin)
+                        await CryptoModels.record_market_event(
+                            message=event["message"],
+                            impact=event["impact"],
+                            affected_coins=affected_coins
+                        )
+                        
+                        # Send event notification to Discord channel (once per event)
+                        await self.send_event_notification(event, coin, affected_coins)
                 
                 # Optional: Print price updates (remove in production)
                 change_percent = price_change_data["change_percent"]
@@ -208,7 +225,7 @@ class CryptoManager:
             print(f"❌ Error getting recent events: {e}")
             return []
     
-    async def send_event_notification(self, event, coin):
+    async def send_event_notification(self, event, coin, affected_coins=None):
         """Send market event notification to Discord channel"""
         try:
             from bot.utils.constants import ALLOWED_CHANNEL_ID
@@ -246,27 +263,60 @@ class CryptoManager:
                 timestamp=datetime.utcnow()
             )
             
-            # Add affected coin info
-            current_price = coin["current_price"]
-            embed.add_field(
-                name=f"💰 {coin['ticker']} Impact",
-                value=f"**Current Price:** ${current_price:.4f}\n"
-                      f"**Expected Impact:** {impact*100:+.1f}%\n"
-                      f"**Coin:** {coin['name']}",
-                inline=False
-            )
+            # Add affected coin info based on scope
+            if not affected_coins:
+                affected_coins = [coin['ticker']]
             
-            # Add footer with trading tip
-            if impact < -0.2:
-                embed.set_footer(text="💡 Major crash detected! Could be a buying opportunity...")
-            elif impact > 0.2:
-                embed.set_footer(text="💡 Big pump happening! Consider taking profits...")
+            if len(affected_coins) == 1:
+                # Single coin impact
+                current_price = coin["current_price"]
+                embed.add_field(
+                    name=f"💰 {coin['ticker']} Impact",
+                    value=f"**Current Price:** ${current_price:.4f}\n"
+                          f"**Expected Impact:** {impact*100:+.1f}%\n"
+                          f"**Coin:** {coin['name']}",
+                    inline=False
+                )
+            elif len(affected_coins) <= 5:
+                # Multiple coins - show list
+                coins_text = ", ".join(affected_coins)
+                embed.add_field(
+                    name=f"💰 Affected Coins ({len(affected_coins)})",
+                    value=f"**Coins:** {coins_text}\n"
+                          f"**Expected Impact:** {impact*100:+.1f}% each",
+                    inline=False
+                )
             else:
-                embed.set_footer(text="💡 Market movement detected. Trade wisely!")
+                # Many coins affected
+                embed.add_field(
+                    name=f"💰 Market-Wide Impact",
+                    value=f"**All {len(affected_coins)} coins affected!**\n"
+                          f"**Expected Impact:** {impact*100:+.1f}% across the board",
+                    inline=False
+                )
+            
+            # Add footer with trading tip based on scope and impact
+            if len(affected_coins) > 5:
+                if impact < -0.2:
+                    embed.set_footer(text="💡 MARKET CRASH! Everything is down - buy the dip?")
+                elif impact > 0.2:
+                    embed.set_footer(text="💡 MARKET BOOM! Everything is pumping - time to sell?")
+                else:
+                    embed.set_footer(text="💡 Market-wide movement detected. Trade wisely!")
+            else:
+                if impact < -0.2:
+                    embed.set_footer(text="💡 Major crash detected! Could be a buying opportunity...")
+                elif impact > 0.2:
+                    embed.set_footer(text="💡 Big pump happening! Consider taking profits...")
+                else:
+                    embed.set_footer(text="💡 Market movement detected. Trade wisely!")
             
             # Send the message
             await channel.send(embed=embed)
-            print(f"📢 Event notification sent for {coin['ticker']}: {event['message']}")
+            if len(affected_coins) == 1:
+                print(f"📢 Event notification sent for {affected_coins[0]}: {event['message']}")
+            else:
+                print(f"📢 Event notification sent for {len(affected_coins)} coins: {event['message']}")
             
         except Exception as e:
             print(f"❌ Error sending event notification: {e}")

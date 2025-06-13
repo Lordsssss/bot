@@ -14,23 +14,29 @@ CRYPTO_COINS = {
     "Chad": {"name": "ChadCoin", "description": "Alpha energy only"}
 }
 
-# Market events that can affect prices (increased frequency and volatility)
+# Market events that can affect prices (MASSIVE impacts, low frequency)
+# Each event specifies its scope: 'single', 'all', or 'random_multiple'
 MARKET_EVENTS = [
-    {"message": "🚨 BREAKING: Major exchange gets hacked!", "impact": -0.35, "probability": 0.08},
-    {"message": "📈 Elon Musk tweets about crypto!", "impact": 0.45, "probability": 0.12},
-    {"message": "🏛️ Government announces crypto regulation!", "impact": -0.28, "probability": 0.07},
-    {"message": "🐋 Whale alert: Large transaction detected!", "impact": 0.22, "probability": 0.15},
-    {"message": "📊 Institutional investor enters the market!", "impact": 0.30, "probability": 0.10},
-    {"message": "⚡ Network congestion causes delays!", "impact": -0.20, "probability": 0.12},
-    {"message": "🎉 New partnership announced!", "impact": 0.35, "probability": 0.09},
-    {"message": "🔥 Token burn event scheduled!", "impact": 0.50, "probability": 0.06},
-    {"message": "😱 FUD spreads on social media!", "impact": -0.25, "probability": 0.14},
-    {"message": "🤖 Trading bot malfunction causes chaos!", "impact": -0.40, "probability": 0.05},
-    {"message": "💥 Flash crash detected across markets!", "impact": -0.60, "probability": 0.03},
-    {"message": "🚀 Surprise moon mission announcement!", "impact": 0.80, "probability": 0.02},
-    {"message": "⚠️ Major security vulnerability discovered!", "impact": -0.45, "probability": 0.04},
-    {"message": "🎯 Pump and dump scheme exposed!", "impact": -0.30, "probability": 0.06},
-    {"message": "💎 Diamond hands movement trending!", "impact": 0.25, "probability": 0.10}
+    # Single coin events (affect only one specific coin)
+    {"message": "🚨 BREAKING: Major exchange gets hacked!", "impact": -0.70, "probability": 0.001, "scope": "single"},
+    {"message": "🐋 Whale alert: Large transaction detected!", "impact": 0.60, "probability": 0.002, "scope": "single"},
+    {"message": "🎉 New partnership announced!", "impact": 0.80, "probability": 0.001, "scope": "single"},
+    {"message": "🔥 Token burn event scheduled!", "impact": 1.20, "probability": 0.0005, "scope": "single"},
+    {"message": "⚠️ Major security vulnerability discovered!", "impact": -0.95, "probability": 0.0008, "scope": "single"},
+    {"message": "🎯 Pump and dump scheme exposed!", "impact": -0.75, "probability": 0.001, "scope": "single"},
+    
+    # Market-wide events (affect ALL coins)
+    {"message": "🏛️ Government announces crypto regulation!", "impact": -0.65, "probability": 0.001, "scope": "all"},
+    {"message": "📊 Institutional investor enters the market!", "impact": 0.75, "probability": 0.001, "scope": "all"},
+    {"message": "😱 FUD spreads on social media!", "impact": -0.50, "probability": 0.002, "scope": "all"},
+    {"message": "🤖 Trading bot malfunction causes chaos!", "impact": -0.85, "probability": 0.001, "scope": "all"},
+    {"message": "💥 Flash crash detected across markets!", "impact": -1.50, "probability": 0.0003, "scope": "all"},
+    {"message": "💎 Diamond hands movement trending!", "impact": 0.65, "probability": 0.001, "scope": "all"},
+    
+    # Celebrity/influence events (affect random multiple coins)
+    {"message": "📈 Elon Musk tweets about crypto!", "impact": 0.90, "probability": 0.001, "scope": "random_multiple"},
+    {"message": "🚀 Surprise moon mission announcement!", "impact": 2.00, "probability": 0.0002, "scope": "random_multiple"},
+    {"message": "⚡ Network congestion causes delays!", "impact": -0.55, "probability": 0.002, "scope": "random_multiple"}
 ]
 
 # Volatility ranges (increased for more chaos)
