@@ -47,7 +47,8 @@ class PortfolioManager:
                 user_id=user_id,
                 ticker=ticker,
                 amount=coins_received,
-                invested_change=amount_to_spend
+                invested_change=amount_to_spend,
+                is_buy=True
             )
             
             # Record transaction
@@ -121,7 +122,9 @@ class PortfolioManager:
                 user_id=user_id,
                 ticker=ticker,
                 amount=-amount_to_sell,
-                invested_change=-net_sale_value  # Negative because we're getting money back
+                invested_change=-net_sale_value,  # Negative because we're getting money back
+                is_buy=False,
+                sale_value=net_sale_value
             )
             
             # Record transaction
@@ -202,7 +205,9 @@ class PortfolioManager:
                         user_id=user_id,
                         ticker=ticker,
                         amount=-amount,
-                        invested_change=-net_sale_value
+                        invested_change=-net_sale_value,
+                        is_buy=False,
+                        sale_value=net_sale_value
                     )
                     
                     # Record transaction
@@ -265,13 +270,22 @@ class PortfolioManager:
             holdings = portfolio.get("holdings", {})
             total_invested = portfolio.get("total_invested", 0)
             
-            if not holdings:
+            # All-time stats
+            all_time_invested = portfolio.get("all_time_invested", 0)
+            all_time_returned = portfolio.get("all_time_returned", 0)
+            all_time_profit_loss = portfolio.get("all_time_profit_loss", 0)
+            
+            if not holdings and all_time_invested == 0:
                 return {
                     "total_value": 0,
                     "total_invested": 0,
                     "profit_loss": 0,
                     "profit_loss_percent": 0,
-                    "holdings": {}
+                    "holdings": {},
+                    "all_time_invested": 0,
+                    "all_time_returned": 0,
+                    "all_time_profit_loss": 0,
+                    "all_time_profit_loss_percent": 0
                 }
             
             total_current_value = 0
@@ -293,16 +307,26 @@ class PortfolioManager:
                             "coin_name": coin["name"]
                         }
             
-            # Calculate profit/loss
+            # Calculate current profit/loss
             profit_loss = total_current_value - total_invested
             profit_loss_percent = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+            
+            # Calculate all-time profit/loss including current holdings
+            current_portfolio_value = total_current_value
+            total_all_time_value = all_time_returned + current_portfolio_value
+            all_time_profit_loss_with_current = total_all_time_value - all_time_invested
+            all_time_profit_loss_percent = (all_time_profit_loss_with_current / all_time_invested * 100) if all_time_invested > 0 else 0
             
             return {
                 "total_value": total_current_value,
                 "total_invested": total_invested,
                 "profit_loss": profit_loss,
                 "profit_loss_percent": profit_loss_percent,
-                "holdings": detailed_holdings
+                "holdings": detailed_holdings,
+                "all_time_invested": all_time_invested,
+                "all_time_returned": all_time_returned,
+                "all_time_profit_loss": all_time_profit_loss_with_current,
+                "all_time_profit_loss_percent": all_time_profit_loss_percent
             }
             
         except Exception as e:
@@ -312,6 +336,10 @@ class PortfolioManager:
                 "profit_loss": 0,
                 "profit_loss_percent": 0,
                 "holdings": {},
+                "all_time_invested": 0,
+                "all_time_returned": 0,
+                "all_time_profit_loss": 0,
+                "all_time_profit_loss_percent": 0,
                 "error": str(e)
             }
     
@@ -321,8 +349,8 @@ class PortfolioManager:
         Get crypto trading leaderboard based on profit/loss percentage
         """
         try:
-            # Get all portfolios
-            portfolios = await CryptoModels.get_portfolio_leaderboard(limit * 2)  # Get more to filter
+            # Get all portfolios sorted by all-time profit/loss
+            portfolios = await CryptoModels.get_portfolio_leaderboard(limit)
             
             leaderboard = []
             
@@ -330,17 +358,19 @@ class PortfolioManager:
                 user_id = portfolio["user_id"]
                 portfolio_data = await PortfolioManager.get_portfolio_value(user_id)
                 
-                if portfolio_data["total_invested"] > 0:  # Only include users who have invested
+                if portfolio_data["all_time_invested"] > 0:  # Only include users who have ever invested
                     leaderboard.append({
                         "user_id": user_id,
                         "total_value": portfolio_data["total_value"],
-                        "total_invested": portfolio_data["total_invested"],
-                        "profit_loss": portfolio_data["profit_loss"],
-                        "profit_loss_percent": portfolio_data["profit_loss_percent"]
+                        "all_time_invested": portfolio_data["all_time_invested"],
+                        "all_time_returned": portfolio_data["all_time_returned"],
+                        "all_time_profit_loss": portfolio_data["all_time_profit_loss"],
+                        "all_time_profit_loss_percent": portfolio_data["all_time_profit_loss_percent"],
+                        "current_holdings": len(portfolio_data["holdings"])
                     })
             
-            # Sort by profit/loss percentage (descending)
-            leaderboard.sort(key=lambda x: x["profit_loss_percent"], reverse=True)
+            # Already sorted by database query, but ensure by all-time profit/loss
+            leaderboard.sort(key=lambda x: x["all_time_profit_loss"], reverse=True)
             
             return leaderboard[:limit]
             

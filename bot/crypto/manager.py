@@ -22,6 +22,11 @@ class CryptoManager:
         # Initialize market if not done
         if not self.market_initialized:
             await self.initialize_market()
+        
+        # Migrate existing portfolios for all-time tracking
+        print("🔄 Checking for portfolio migrations...")
+        await CryptoModels.migrate_portfolios_for_all_time_tracking()
+        print("✅ Portfolio migration complete!")
             
         self.is_running = True
         

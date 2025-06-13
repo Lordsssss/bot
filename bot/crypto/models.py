@@ -59,24 +59,49 @@ class CryptoModels:
                 "user_id": user_id,
                 "holdings": {},  # {ticker: amount}
                 "total_invested": 0.0,
+                "all_time_invested": 0.0,  # Total ever invested
+                "all_time_returned": 0.0,  # Total ever received from sales
+                "all_time_profit_loss": 0.0,  # all_time_returned - all_time_invested
                 "created_at": datetime.utcnow()
             }
             await crypto_portfolios.insert_one(portfolio)
         return portfolio
     
     @staticmethod
-    async def update_portfolio(user_id: str, ticker: str, amount: float, invested_change: float):
-        """Update user's portfolio"""
+    async def update_portfolio(user_id: str, ticker: str, amount: float, invested_change: float, 
+                             is_buy: bool = True, sale_value: float = 0.0):
+        """Update user's portfolio with all-time tracking"""
+        update_fields = {
+            f"holdings.{ticker}": amount,
+            "total_invested": invested_change
+        }
+        
+        if is_buy:
+            # Buying crypto - add to all_time_invested
+            update_fields["all_time_invested"] = invested_change
+        else:
+            # Selling crypto - add to all_time_returned
+            update_fields["all_time_returned"] = sale_value
+            # We'll update all_time_profit_loss in a separate operation to avoid recursion
+        
         await crypto_portfolios.update_one(
             {"user_id": user_id},
-            {
-                "$inc": {
-                    f"holdings.{ticker}": amount,
-                    "total_invested": invested_change
-                }
-            },
+            {"$inc": update_fields},
             upsert=True
         )
+        
+        # Update all_time_profit_loss separately for sells
+        if not is_buy:
+            portfolio = await crypto_portfolios.find_one({"user_id": user_id})
+            if portfolio:
+                all_time_invested = portfolio.get("all_time_invested", 0.0)
+                all_time_returned = portfolio.get("all_time_returned", 0.0)
+                new_all_time_profit_loss = all_time_returned - all_time_invested
+                
+                await crypto_portfolios.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"all_time_profit_loss": new_all_time_profit_loss}}
+                )
     
     @staticmethod
     async def record_transaction(user_id: str, ticker: str, transaction_type: str, 
@@ -122,13 +147,12 @@ class CryptoModels:
     
     @staticmethod
     async def get_portfolio_leaderboard(limit: int = 10):
-        """Get crypto portfolio leaderboard"""
-        # This will be calculated based on current portfolio value
+        """Get crypto portfolio leaderboard based on all-time performance"""
+        # Get all portfolios that have ever traded (all_time_invested > 0)
         portfolios = await crypto_portfolios.find(
-            {"holdings": {"$ne": {}}}
-        ).to_list(length=None)
+            {"all_time_invested": {"$gt": 0}}
+        ).sort("all_time_profit_loss", -1).limit(limit).to_list(length=None)
         
-        # Calculate portfolio values (will be done in the manager)
         return portfolios
     
     @staticmethod
@@ -152,3 +176,43 @@ class CryptoModels:
             },
             upsert=True
         )
+    
+    @staticmethod
+    async def migrate_portfolios_for_all_time_tracking():
+        """Migrate existing portfolios to include all-time tracking fields"""
+        portfolios = await crypto_portfolios.find({}).to_list(length=None)
+        
+        for portfolio in portfolios:
+            user_id = portfolio["user_id"]
+            
+            # Skip if already migrated
+            if "all_time_invested" in portfolio:
+                continue
+            
+            # Calculate all-time stats from transaction history
+            transactions = await crypto_transactions.find({"user_id": user_id}).to_list(length=None)
+            
+            all_time_invested = 0.0
+            all_time_returned = 0.0
+            
+            for tx in transactions:
+                if tx["type"] == "buy":
+                    all_time_invested += tx["total_cost"]
+                elif tx["type"] == "sell":
+                    all_time_returned += tx["total_cost"]
+            
+            all_time_profit_loss = all_time_returned - all_time_invested
+            
+            # Update portfolio with calculated values
+            await crypto_portfolios.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "all_time_invested": all_time_invested,
+                        "all_time_returned": all_time_returned,
+                        "all_time_profit_loss": all_time_profit_loss
+                    }
+                }
+            )
+            
+            print(f"Migrated portfolio for user {user_id}: invested={all_time_invested:.2f}, returned={all_time_returned:.2f}, P/L={all_time_profit_loss:.2f}")

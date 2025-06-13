@@ -39,12 +39,12 @@ MARKET_EVENTS = [
     {"message": "⚡ Network congestion causes delays!", "impact": -0.55, "probability": 0.002, "scope": "random_multiple"}
 ]
 
-# Volatility ranges (increased for more chaos)
+# Volatility ranges (EXPLOSIVE movements only)
 VOLATILITY_RANGES = {
-    "low": (0.8, 1.2),
-    "normal": (1.3, 2.0),
-    "high": (2.1, 3.5),
-    "extreme": (3.6, 5.0)
+    "low": (3.0, 5.0),
+    "normal": (5.1, 8.0),
+    "high": (8.1, 12.0),
+    "extreme": (12.1, 20.0)
 }
 
 # Update frequency (in seconds) - much more frequent

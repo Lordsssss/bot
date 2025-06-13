@@ -452,10 +452,19 @@ async def crypto_portfolio(interaction: Interaction):
         
         # Portfolio summary
         embed.add_field(
-            name="📊 Portfolio Summary",
-            value=f"**Total Value:** {portfolio_data['total_value']:.2f} points\n"
-                  f"**Total Invested:** {portfolio_data['total_invested']:.2f} points\n"
-                  f"**Profit/Loss:** {portfolio_data['profit_loss']:+.2f} points ({portfolio_data['profit_loss_percent']:+.2f}%)",
+            name="📊 Current Portfolio",
+            value=f"**Current Value:** {portfolio_data['total_value']:.2f} points\n"
+                  f"**Currently Invested:** {portfolio_data['total_invested']:.2f} points\n"
+                  f"**Current P/L:** {portfolio_data['profit_loss']:+.2f} points ({portfolio_data['profit_loss_percent']:+.2f}%)",
+            inline=False
+        )
+        
+        # All-time summary
+        embed.add_field(
+            name="🏆 All-Time Performance",
+            value=f"**Total Ever Invested:** {portfolio_data['all_time_invested']:.2f} points\n"
+                  f"**Total Ever Returned:** {portfolio_data['all_time_returned']:.2f} points\n"
+                  f"**All-Time P/L:** {portfolio_data['all_time_profit_loss']:+.2f} points ({portfolio_data['all_time_profit_loss_percent']:+.2f}%)",
             inline=False
         )
         
@@ -512,8 +521,8 @@ async def crypto_leaderboard(interaction: Interaction):
             return
         
         embed = discord.Embed(
-            title="🏆 Crypto Trading Leaderboard",
-            description="Top traders ranked by profit/loss percentage",
+            title="🏆 Crypto Trading Leaderboard (All-Time)",
+            description="Top traders ranked by all-time profit/loss",
             color=0xffd700,
             timestamp=datetime.utcnow()
         )
@@ -529,11 +538,16 @@ async def crypto_leaderboard(interaction: Interaction):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             
             leaderboard_text += f"{medal} **{username}**\n"
-            leaderboard_text += f"   Value: {trader['total_value']:.2f} pts | "
-            leaderboard_text += f"P/L: {trader['profit_loss']:+.2f} ({trader['profit_loss_percent']:+.2f}%)\n\n"
+            leaderboard_text += f"   All-Time P/L: {trader['all_time_profit_loss']:+.2f} pts ({trader['all_time_profit_loss_percent']:+.2f}%)\n"
+            
+            # Show if they currently have holdings or cashed out
+            if trader['current_holdings'] > 0:
+                leaderboard_text += f"   Status: 💼 Active ({trader['current_holdings']} holdings)\n\n"
+            else:
+                leaderboard_text += f"   Status: 💰 Cashed Out\n\n"
         
         embed.add_field(name="Top Traders", value=leaderboard_text, inline=False)
-        embed.set_footer(text="Rankings update with each trade")
+        embed.set_footer(text="All-time rankings • 💼 = Active trader • 💰 = Cashed out")
         
         await interaction.followup.send(embed=embed)
         
