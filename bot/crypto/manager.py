@@ -1,10 +1,11 @@
 """
-Clean, optimized crypto manager
+Clean, optimized crypto manager with advanced simulator
 """
 import asyncio
 import random
 from datetime import datetime
 from .simulator import MarketSimulator
+from .advanced_simulator import AdvancedCryptoSimulator
 from .models import CryptoModels
 from .constants import UPDATE_FREQUENCY_MIN, UPDATE_FREQUENCY_MAX
 from bot.utils.discord_helpers import get_impact_color, get_impact_emoji
@@ -13,9 +14,12 @@ from bot.utils.discord_helpers import get_impact_color, get_impact_emoji
 class CryptoManager:
     def __init__(self, client):
         self.client = client
-        self.simulator = MarketSimulator()
+        self.simulator = MarketSimulator()  # Legacy simulator for fallback
+        self.advanced_simulator = AdvancedCryptoSimulator()  # New advanced simulator
+        self.use_advanced_mode = True  # Toggle between simulators
         self.is_running = False
         self.market_initialized = False
+        self.advanced_initialized = False
         
     async def start(self):
         """Start the crypto trading system"""
@@ -27,10 +31,23 @@ class CryptoManager:
         if not self.market_initialized:
             await self._initialize_market()
         
-        # Migrate existing portfolios for all-time tracking
+        # Migrate existing portfolios
         print("🔄 Checking for portfolio migrations...")
         await CryptoModels.migrate_portfolios_for_all_time_tracking()
+        await CryptoModels.migrate_portfolios_for_cost_basis()
         print("✅ Portfolio migration complete!")
+        
+        # Initialize advanced simulator
+        if self.use_advanced_mode and not self.advanced_initialized:
+            print("🧠 Initializing advanced crypto simulator...")
+            try:
+                await self.advanced_simulator.initialize()
+                self.advanced_initialized = True
+                print("🎯 Advanced simulator ready!")
+            except Exception as e:
+                print(f"⚠️ Advanced simulator failed to initialize: {e}")
+                print("📉 Falling back to legacy simulator")
+                self.use_advanced_mode = False
             
         self.is_running = True
         
@@ -43,6 +60,11 @@ class CryptoManager:
     async def stop(self):
         """Stop the crypto trading system"""
         self.is_running = False
+        
+        # Cleanup advanced simulator
+        if self.advanced_initialized:
+            await self.advanced_simulator.cleanup()
+            
         print("⏹️ Crypto Trading System stopped.")
         
     async def _initialize_market(self):
@@ -82,36 +104,59 @@ class CryptoManager:
     async def _update_all_prices(self):
         """Update prices for all cryptocurrencies"""
         try:
-            coins = await CryptoModels.get_all_coins()
-            if not coins:
-                return
+            if self.use_advanced_mode and self.advanced_initialized:
+                # Use advanced simulator
+                price_updates = await self.advanced_simulator.update_market_prices()
                 
-            current_time = datetime.utcnow()
-            
-            for coin in coins:
-                # Calculate time since last update
-                last_update = coin.get("last_updated", current_time)
-                if isinstance(last_update, datetime):
-                    time_diff = (current_time - last_update).total_seconds() / 60.0
-                else:
-                    time_diff = 1.0
+                for update in price_updates:
+                    ticker = update["ticker"]
+                    new_price = update["price"]
+                    
+                    # Get old price for change calculation
+                    coin = await CryptoModels.get_coin(ticker)
+                    old_price = coin["current_price"] if coin else new_price
+                    change_percent = ((new_price - old_price) / old_price) * 100 if old_price > 0 else 0
+                    
+                    print(f"🧠 {ticker}: ${new_price:.6f} ({change_percent:+.2f}%)")
                 
-                # Calculate new price
-                price_change_data = self.simulator.calculate_price_change(coin, time_diff)
-                new_price = price_change_data["new_price"]
+                print(f"🎯 Advanced simulator updated {len(price_updates)} coins")
                 
-                # Update price in database
-                await CryptoModels.update_coin_price(coin["ticker"], new_price, current_time)
+            else:
+                # Use legacy simulator
+                coins = await CryptoModels.get_all_coins()
+                if not coins:
+                    return
+                    
+                current_time = datetime.utcnow()
                 
-                # Optional: Print price updates
-                change_percent = price_change_data["change_percent"]
-                print(f"📈 {coin['ticker']}: ${new_price:.4f} ({change_percent:+.2f}%)")
-            
-            # Process any pending events
-            await self._process_pending_events(current_time)
+                for coin in coins:
+                    # Calculate time since last update
+                    last_update = coin.get("last_updated", current_time)
+                    if isinstance(last_update, datetime):
+                        time_diff = (current_time - last_update).total_seconds() / 60.0
+                    else:
+                        time_diff = 1.0
+                    
+                    # Calculate new price
+                    price_change_data = self.simulator.calculate_price_change(coin, time_diff)
+                    new_price = price_change_data["new_price"]
+                    
+                    # Update price in database
+                    await CryptoModels.update_coin_price(coin["ticker"], new_price, current_time)
+                    
+                    # Optional: Print price updates
+                    change_percent = price_change_data["change_percent"]
+                    print(f"📈 {coin['ticker']}: ${new_price:.4f} ({change_percent:+.2f}%)")
+                
+                # Process any pending events
+                await self._process_pending_events(current_time)
                 
         except Exception as e:
             print(f"❌ Error updating prices: {e}")
+            # Fallback to legacy mode if advanced mode fails
+            if self.use_advanced_mode:
+                print("⚠️ Switching to legacy simulator due to error")
+                self.use_advanced_mode = False
     
     async def _process_pending_events(self, current_time: datetime):
         """Process any pending market events"""
@@ -143,9 +188,9 @@ class CryptoManager:
             )
             
             # Send Discord notification
-            await self._send_event_notification(event, affected_coins)
+            await self.send_event_notification(event, None, affected_coins)
     
-    async def _send_event_notification(self, event: dict, affected_coins: list):
+    async def send_event_notification(self, event: dict, coin_data: dict = None, affected_coins: list = None):
         """Send market event notification to Discord"""
         try:
             from bot.utils.constants import ALLOWED_CHANNEL_ID
@@ -154,6 +199,10 @@ class CryptoManager:
             channel = self.client.get_channel(ALLOWED_CHANNEL_ID)
             if not channel:
                 return
+            
+            # Use affected_coins from parameter or event
+            if affected_coins is None:
+                affected_coins = event.get("affected_coins", [])
             
             impact = event["impact"]
             color = get_impact_color(impact)

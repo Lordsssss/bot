@@ -58,7 +58,8 @@ class CryptoModels:
             portfolio = {
                 "user_id": user_id,
                 "holdings": {},  # {ticker: amount}
-                "total_invested": 0.0,
+                "cost_basis": {},  # {ticker: total_cost} - tracks what was paid for current holdings
+                "total_invested": 0.0,  # Current amount invested in holdings
                 "all_time_invested": 0.0,  # Total ever invested
                 "all_time_returned": 0.0,  # Total ever received from sales
                 "all_time_profit_loss": 0.0,  # all_time_returned - all_time_invested
@@ -68,40 +69,83 @@ class CryptoModels:
         return portfolio
     
     @staticmethod
-    async def update_portfolio(user_id: str, ticker: str, amount: float, invested_change: float, 
+    async def update_portfolio(user_id: str, ticker: str, amount: float, cost_change: float, 
                              is_buy: bool = True, sale_value: float = 0.0):
-        """Update user's portfolio with all-time tracking"""
-        update_fields = {
-            f"holdings.{ticker}": amount,
-            "total_invested": invested_change
-        }
+        """Update user's portfolio with proper cost basis tracking"""
         
         if is_buy:
-            # Buying crypto - add to all_time_invested
-            update_fields["all_time_invested"] = invested_change
+            # Buying crypto - add to holdings and cost basis
+            update_fields = {
+                f"holdings.{ticker}": amount,
+                f"cost_basis.{ticker}": cost_change,
+                "total_invested": cost_change,
+                "all_time_invested": cost_change
+            }
+            
+            await crypto_portfolios.update_one(
+                {"user_id": user_id},
+                {"$inc": update_fields},
+                upsert=True
+            )
         else:
-            # Selling crypto - add to all_time_returned
-            update_fields["all_time_returned"] = sale_value
-            # We'll update all_time_profit_loss in a separate operation to avoid recursion
-        
-        await crypto_portfolios.update_one(
-            {"user_id": user_id},
-            {"$inc": update_fields},
-            upsert=True
-        )
-        
-        # Update all_time_profit_loss separately for sells
-        if not is_buy:
+            # Selling crypto - need to calculate proportional cost basis reduction
             portfolio = await crypto_portfolios.find_one({"user_id": user_id})
-            if portfolio:
-                all_time_invested = portfolio.get("all_time_invested", 0.0)
-                all_time_returned = portfolio.get("all_time_returned", 0.0)
-                new_all_time_profit_loss = all_time_returned - all_time_invested
+            if not portfolio:
+                return
                 
-                await crypto_portfolios.update_one(
-                    {"user_id": user_id},
-                    {"$set": {"all_time_profit_loss": new_all_time_profit_loss}}
-                )
+            current_holdings = portfolio.get("holdings", {}).get(ticker, 0)
+            current_cost_basis = portfolio.get("cost_basis", {}).get(ticker, 0)
+            
+            if current_holdings <= 0:
+                return
+                
+            # Calculate proportional cost basis to remove
+            sell_ratio = abs(amount) / current_holdings
+            cost_basis_to_remove = current_cost_basis * sell_ratio
+            
+            update_fields = {
+                f"holdings.{ticker}": amount,  # This should be negative
+                f"cost_basis.{ticker}": -cost_basis_to_remove,
+                "total_invested": -cost_basis_to_remove,
+                "all_time_returned": sale_value
+            }
+            
+            await crypto_portfolios.update_one(
+                {"user_id": user_id},
+                {"$inc": update_fields},
+                upsert=True
+            )
+            
+            # Clean up zero or negative cost basis entries
+            updated_portfolio = await crypto_portfolios.find_one({"user_id": user_id})
+            if updated_portfolio:
+                cost_basis = updated_portfolio.get("cost_basis", {})
+                holdings = updated_portfolio.get("holdings", {})
+                
+                # Remove entries with zero holdings
+                unset_fields = {}
+                for t, h in holdings.items():
+                    if h <= 0.001:  # Essentially zero due to rounding
+                        unset_fields[f"holdings.{t}"] = ""
+                        unset_fields[f"cost_basis.{t}"] = ""
+                
+                if unset_fields:
+                    await crypto_portfolios.update_one(
+                        {"user_id": user_id},
+                        {"$unset": unset_fields}
+                    )
+        
+        # Update all_time_profit_loss
+        portfolio = await crypto_portfolios.find_one({"user_id": user_id})
+        if portfolio:
+            all_time_invested = portfolio.get("all_time_invested", 0.0)
+            all_time_returned = portfolio.get("all_time_returned", 0.0)
+            new_all_time_profit_loss = all_time_returned - all_time_invested
+            
+            await crypto_portfolios.update_one(
+                {"user_id": user_id},
+                {"$set": {"all_time_profit_loss": new_all_time_profit_loss}}
+            )
     
     @staticmethod
     async def record_transaction(user_id: str, ticker: str, transaction_type: str, 
@@ -176,6 +220,81 @@ class CryptoModels:
             },
             upsert=True
         )
+    
+    @staticmethod
+    async def migrate_portfolios_for_cost_basis():
+        """Migrate existing portfolios to include cost basis tracking"""
+        portfolios = await crypto_portfolios.find({}).to_list(length=None)
+        
+        for portfolio in portfolios:
+            user_id = portfolio["user_id"]
+            
+            # Skip if already has cost_basis field
+            if "cost_basis" in portfolio:
+                continue
+                
+            print(f"Migrating portfolio for user {user_id}...")
+            
+            # Calculate cost basis from transaction history
+            transactions = await crypto_transactions.find({"user_id": user_id}).to_list(length=None)
+            
+            # Track holdings and cost basis by coin
+            holdings_tracker = {}
+            cost_basis_tracker = {}
+            all_time_invested = 0.0
+            all_time_returned = 0.0
+            
+            for tx in transactions:
+                ticker = tx["ticker"]
+                
+                if tx["type"] == "buy":
+                    amount = tx["amount"]
+                    cost = tx["total_cost"]
+                    
+                    holdings_tracker[ticker] = holdings_tracker.get(ticker, 0) + amount
+                    cost_basis_tracker[ticker] = cost_basis_tracker.get(ticker, 0) + cost
+                    all_time_invested += cost
+                    
+                elif tx["type"] == "sell":
+                    amount = tx["amount"]
+                    sale_value = tx["total_cost"]
+                    
+                    current_holdings = holdings_tracker.get(ticker, 0)
+                    current_cost_basis = cost_basis_tracker.get(ticker, 0)
+                    
+                    if current_holdings > 0:
+                        # Calculate proportional cost basis to remove
+                        sell_ratio = min(amount / current_holdings, 1.0)
+                        cost_basis_to_remove = current_cost_basis * sell_ratio
+                        
+                        holdings_tracker[ticker] = max(0, current_holdings - amount)
+                        cost_basis_tracker[ticker] = max(0, current_cost_basis - cost_basis_to_remove)
+                    
+                    all_time_returned += sale_value
+            
+            # Clean up zero holdings
+            holdings_tracker = {k: v for k, v in holdings_tracker.items() if v > 0.001}
+            cost_basis_tracker = {k: v for k, v in cost_basis_tracker.items() if k in holdings_tracker}
+            
+            total_invested = sum(cost_basis_tracker.values())
+            all_time_profit_loss = all_time_returned - all_time_invested
+            
+            # Update portfolio with calculated values
+            await crypto_portfolios.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "holdings": holdings_tracker,
+                        "cost_basis": cost_basis_tracker,
+                        "total_invested": total_invested,
+                        "all_time_invested": all_time_invested,
+                        "all_time_returned": all_time_returned,
+                        "all_time_profit_loss": all_time_profit_loss
+                    }
+                }
+            )
+            
+            print(f"Migrated portfolio for user {user_id}: holdings={len(holdings_tracker)}, invested=${total_invested:.2f}, P/L=${all_time_profit_loss:.2f}")
     
     @staticmethod
     async def migrate_portfolios_for_all_time_tracking():

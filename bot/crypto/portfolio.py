@@ -39,7 +39,7 @@ class PortfolioManager:
                 user_id=user_id,
                 ticker=ticker,
                 amount=coins_received,
-                invested_change=amount_to_spend,
+                cost_change=amount_to_spend,
                 is_buy=True
             )
             await CryptoModels.record_transaction(
@@ -99,7 +99,7 @@ class PortfolioManager:
                 user_id=user_id,
                 ticker=ticker,
                 amount=-amount_to_sell,
-                invested_change=-net_sale_value,
+                cost_change=0,  # Cost basis reduction calculated automatically
                 is_buy=False,
                 sale_value=net_sale_value
             )
@@ -167,7 +167,7 @@ class PortfolioManager:
                         user_id=user_id,
                         ticker=ticker,
                         amount=-amount,
-                        invested_change=-net_sale_value,
+                        cost_change=0,  # Cost basis reduction calculated automatically
                         is_buy=False,
                         sale_value=net_sale_value
                     )
@@ -217,6 +217,7 @@ class PortfolioManager:
         try:
             portfolio = await CryptoModels.get_user_portfolio(user_id)
             holdings = portfolio.get("holdings", {})
+            cost_basis = portfolio.get("cost_basis", {})
             total_invested = portfolio.get("total_invested", 0)
             
             # All-time stats

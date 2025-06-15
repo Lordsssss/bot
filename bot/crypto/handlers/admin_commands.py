@@ -127,3 +127,35 @@ async def handle_crypto_admin_event(interaction: Interaction, event_type: str, t
         
     except Exception as e:
         await send_error_response(interaction, f"Error triggering event: {str(e)}")
+
+
+async def handle_crypto_admin_migrate(interaction: Interaction):
+    """[ADMIN ONLY] Run portfolio migration to fix P/L calculations"""
+    if not await check_channel_permission(interaction):
+        return
+    
+    if not await check_admin_permission(interaction):
+        return
+    
+    try:
+        await interaction.response.defer(ephemeral=True)
+        
+        # Run the migration
+        await CryptoModels.migrate_portfolios_for_cost_basis()
+        
+        embed = create_embed(
+            title="✅ Portfolio Migration Complete!",
+            description="Successfully migrated all portfolios to use proper cost basis tracking",
+            color=0x00ff00,
+            fields=[{
+                "name": "Migration Details",
+                "value": "• Fixed P/L calculations\n• Added cost basis tracking per coin\n• Recalculated all portfolio values from transaction history",
+                "inline": False
+            }],
+            footer="P/L calculations should now be accurate"
+        )
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        await send_error_response(interaction, f"Error running migration: {str(e)}")

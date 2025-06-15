@@ -6,12 +6,12 @@ from discord import app_commands, Interaction
 # Import handlers
 from bot.crypto.handlers.info_commands import (
     handle_crypto_prices, handle_crypto_charts, handle_crypto_portfolio,
-    handle_crypto_leaderboard, handle_crypto_history
+    handle_crypto_leaderboard, handle_crypto_history, handle_crypto_analysis
 )
 from bot.crypto.handlers.trading_commands import (
     handle_crypto_buy, handle_crypto_sell, handle_crypto_sell_all
 )
-from bot.crypto.handlers.admin_commands import handle_crypto_admin_event
+from bot.crypto.handlers.admin_commands import handle_crypto_admin_event, handle_crypto_admin_migrate
 
 
 # Information Commands
@@ -48,6 +48,14 @@ async def crypto_history(interaction: Interaction):
     await handle_crypto_history(interaction)
 
 
+@app_commands.describe(
+    ticker="Crypto ticker for detailed analysis (optional, shows overview if not provided)"
+)
+async def crypto_analysis(interaction: Interaction, ticker: str = None):
+    """View detailed market analysis for skilled trading"""
+    await handle_crypto_analysis(interaction, ticker)
+
+
 # Trading Commands
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
@@ -81,3 +89,9 @@ async def crypto_sell_all(interaction: Interaction):
 async def crypto_admin_event(interaction: Interaction, event_type: str, target_coin: str = None):
     """[ADMIN ONLY] Manually trigger a market event"""
     await handle_crypto_admin_event(interaction, event_type, target_coin)
+
+
+@app_commands.describe()
+async def crypto_admin_migrate(interaction: Interaction):
+    """[ADMIN ONLY] Run portfolio migration to fix P/L calculations"""
+    await handle_crypto_admin_migrate(interaction)
