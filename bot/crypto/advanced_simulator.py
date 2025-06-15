@@ -33,25 +33,48 @@ class AdvancedCryptoSimulator:
         # Fetch real historical data for all coins
         for bot_ticker in CRYPTO_COINS.keys():
             print(f"📊 Fetching pattern data for {bot_ticker}...")
-            pattern_data = await self.data_fetcher.get_pattern_for_coin(bot_ticker)
-            
-            if pattern_data:
-                # Compress timeframe: 1 year -> 1 week
-                compressed_data = await self.data_fetcher.compress_timeframe(pattern_data, self.time_compression)
-                self.pattern_cache[bot_ticker] = compressed_data
+            try:
+                pattern_data = await self.data_fetcher.get_pattern_for_coin(bot_ticker)
+                
+                if pattern_data and len(pattern_data) > 10:  # Ensure we have enough data
+                    # Compress timeframe: 1 year -> 1 week
+                    compressed_data = await self.data_fetcher.compress_timeframe(pattern_data, self.time_compression)
+                    self.pattern_cache[bot_ticker] = compressed_data
+                    
+                    print(f"✅ Loaded {len(compressed_data)} data points for {bot_ticker}")
+                else:
+                    print(f"⚠️ Insufficient data for {bot_ticker}, using fallback")
+                    # Generate fallback pattern data
+                    fallback_data = self.data_fetcher._generate_fallback_data(365)
+                    compressed_data = await self.data_fetcher.compress_timeframe(fallback_data, self.time_compression)
+                    self.pattern_cache[bot_ticker] = compressed_data
+                    print(f"📊 Generated {len(compressed_data)} fallback data points for {bot_ticker}")
+                
+                # Get current price from database for base price
+                coin_data = await CryptoModels.get_coin(bot_ticker)
+                base_price = coin_data["current_price"] if coin_data else 1.0
                 
                 # Initialize current position in pattern
                 self.current_patterns[bot_ticker] = {
                     "data_index": 0,
-                    "base_price": CRYPTO_COINS[bot_ticker]["starting_price"],
+                    "base_price": base_price,
                     "pattern_scale": 1.0,
                     "trend_momentum": 0.0
                 }
                 
-                print(f"✅ Loaded {len(compressed_data)} data points for {bot_ticker}")
-            else:
-                print(f"⚠️ Failed to fetch data for {bot_ticker}, using fallback")
+            except Exception as e:
+                print(f"❌ Error initializing {bot_ticker}: {e}")
+                # Still initialize with empty data to prevent crashes
                 self.pattern_cache[bot_ticker] = []
+                coin_data = await CryptoModels.get_coin(bot_ticker)
+                base_price = coin_data["current_price"] if coin_data else 1.0
+                
+                self.current_patterns[bot_ticker] = {
+                    "data_index": 0,
+                    "base_price": base_price,
+                    "pattern_scale": 1.0,
+                    "trend_momentum": 0.0
+                }
         
         # Initialize skill indicators
         await self._initialize_skill_indicators()

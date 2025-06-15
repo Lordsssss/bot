@@ -94,6 +94,11 @@ def _register_crypto_commands():
         callback=crypto.crypto_history, 
         description="View your recent crypto transactions"
     ))
+    crypto_group.add_command(app_commands.Command(
+        name="analysis", 
+        callback=crypto.crypto_analysis, 
+        description="View detailed market analysis for skilled trading"
+    ))
     
     # Trading commands
     crypto_group.add_command(app_commands.Command(
@@ -117,6 +122,11 @@ def _register_crypto_commands():
         name="adminevent", 
         callback=crypto.crypto_admin_event, 
         description="[ADMIN ONLY] Manually trigger a market event"
+    ))
+    crypto_group.add_command(app_commands.Command(
+        name="adminmigrate", 
+        callback=crypto.crypto_admin_migrate, 
+        description="[ADMIN ONLY] Run portfolio migration to fix P/L calculations"
     ))
     
     client.tree.add_command(crypto_group)
