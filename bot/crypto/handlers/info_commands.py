@@ -111,8 +111,9 @@ async def handle_crypto_charts(interaction: Interaction, ticker: str, timeline: 
                 await send_error_response(interaction, f"No valid cryptos found!\nAvailable: {get_available_tickers_string()}")
             return
         
-        # Generate chart using ChartGenerator
-        chart_file, embed = await ChartGenerator.generate_chart(valid_tickers, coin_data, hours)
+        # Generate chart using ChartGenerator with user transaction markers
+        user_id = str(interaction.user.id)
+        chart_file, embed = await ChartGenerator.generate_chart(valid_tickers, coin_data, hours, user_id)
         await interaction.followup.send(embed=embed, file=chart_file)
         
     except Exception as e:

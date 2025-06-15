@@ -120,13 +120,20 @@ class AdvancedCryptoSimulator:
             for ticker in CRYPTO_COINS.keys():
                 new_price = await self._calculate_advanced_price(ticker)
                 if new_price:
+                    # Get old price for change calculation
+                    coin = await CryptoModels.get_coin(ticker)
+                    old_price = coin["current_price"] if coin else new_price
+                    change_percent = ((new_price - old_price) / old_price) * 100 if old_price > 0 else 0
+                    
                     # Update skill indicators
                     await self._update_skill_indicators(ticker, new_price)
                     
-                    # Store price update
+                    # Store price update with change info
                     price_updates.append({
                         "ticker": ticker,
                         "price": new_price,
+                        "old_price": old_price,
+                        "change_percent": change_percent,
                         "timestamp": datetime.utcnow()
                     })
             

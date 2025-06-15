@@ -88,7 +88,7 @@ class ChartGenerator:
                 return f"{days:.1f} days"
     
     @staticmethod
-    async def generate_chart(tickers: List[str], coin_data: Dict[str, Any], hours: float) -> Tuple[discord.File, discord.Embed]:
+    async def generate_chart(tickers: List[str], coin_data: Dict[str, Any], hours: float, user_id: str = None) -> Tuple[discord.File, discord.Embed]:
         """Generate price chart for given tickers and timeline"""
         
         # Configure chart style
@@ -141,6 +141,10 @@ class ChartGenerator:
                    label=f"{ticker}" if len(tickers) > 1 else f"{ticker} ({data['coin']['name']})", 
                    alpha=0.9)
         
+        # Add transaction markers if user_id is provided
+        if user_id:
+            await ChartGenerator._add_transaction_markers(ax, chart_data, tickers, hours, user_id)
+        
         # Configure chart appearance
         timeline_display = ChartGenerator.format_timeline_display(hours)
         
@@ -165,6 +169,10 @@ class ChartGenerator:
             ax.legend(loc='upper left', fontsize=9, ncol=2 if len(tickers) > 6 else 1)
             ax.axhline(y=0, color='white', linestyle='--', alpha=0.5)
         
+        # Add transaction marker legend if user_id is provided
+        if user_id:
+            ChartGenerator._add_transaction_legend(ax)
+        
         # Add annotations for single crypto
         if len(tickers) == 1:
             ChartGenerator._add_single_crypto_annotations(ax, chart_data[tickers[0]])
@@ -185,7 +193,7 @@ class ChartGenerator:
         file = discord.File(img_buffer, filename=filename)
         
         # Create embed
-        embed = ChartGenerator._create_chart_embed(chart_data, tickers, timeline_display, filename)
+        embed = ChartGenerator._create_chart_embed(chart_data, tickers, timeline_display, filename, user_id is not None)
         
         return file, embed
     
@@ -269,7 +277,7 @@ class ChartGenerator:
     
     @staticmethod
     def _create_chart_embed(chart_data: Dict[str, Dict[str, Any]], tickers: List[str], 
-                          timeline_display: str, filename: str) -> discord.Embed:
+                          timeline_display: str, filename: str, has_transactions: bool = False) -> discord.Embed:
         """Create Discord embed for chart"""
         if len(tickers) == 1:
             # Single crypto embed
@@ -287,7 +295,7 @@ class ChartGenerator:
                     f"**Volatility:** {data['coin']['daily_volatility']:.2f}"
                 ),
                 color=0x00ff00 if price_change >= 0 else 0xff0000,
-                footer=f"Chart shows {timeline_display} of trading data"
+                footer=f"Chart shows {timeline_display} of trading data" + (" | ▲ = Buy, ▼ = Sell" if has_transactions else "")
             )
         else:
             # Multiple cryptos embed
@@ -312,8 +320,176 @@ class ChartGenerator:
                 title="📈 Crypto Comparison Chart",
                 description=description,
                 color=0x00ff00,
-                footer=f"Chart shows percentage change over {timeline_display} | All lines superposed for comparison"
+                footer=f"Chart shows percentage change over {timeline_display} | All lines superposed for comparison" + (" | ▲ = Buy, ▼ = Sell" if has_transactions else "")
             )
         
         embed.set_image(url=f"attachment://{filename}")
         return embed
+    
+    @staticmethod
+    async def _add_transaction_markers(ax, chart_data: Dict[str, Dict[str, Any]], tickers: List[str], hours: float, user_id: str):
+        """Add buy/sell transaction markers to the chart"""
+        try:
+            from datetime import datetime, timedelta
+            
+            # Calculate time range for transactions
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            
+            # Get user transactions for each ticker in the chart
+            for ticker in tickers:
+                if ticker not in chart_data:
+                    continue
+                    
+                # Get recent transactions for this ticker and user
+                all_transactions = await CryptoModels.get_user_transactions(user_id, limit=100)
+                
+                # Filter transactions for this ticker and time range
+                ticker_transactions = [
+                    tx for tx in all_transactions 
+                    if tx["ticker"] == ticker and tx["timestamp"] >= cutoff_time
+                ]
+                
+                if not ticker_transactions:
+                    continue
+                
+                chart_times = chart_data[ticker]['times']
+                chart_prices = chart_data[ticker]['prices']
+                chart_plot_values = chart_data[ticker]['plot_values']
+                
+                # For single vs multiple crypto charts, we need different y-values
+                is_single_chart = len(tickers) == 1
+                
+                for tx in ticker_transactions:
+                    tx_time = tx["timestamp"]
+                    tx_price = tx["price"]
+                    tx_amount = tx["amount"]
+                    tx_type = tx["type"]
+                    tx_total = tx.get("total_cost", 0)
+                    
+                    # Find the closest chart point in time to interpolate y-value
+                    y_value = ChartGenerator._interpolate_chart_value(
+                        tx_time, chart_times, chart_plot_values, chart_prices, is_single_chart
+                    )
+                    
+                    if y_value is None:
+                        continue
+                    
+                    # Choose marker style and color
+                    if tx_type == "buy":
+                        marker = "^"  # Triangle up
+                        color = "#00FF00"  # Bright green
+                        edge_color = "#008000"  # Dark green
+                    else:  # sell
+                        marker = "v"  # Triangle down  
+                        color = "#FF0000"  # Bright red
+                        edge_color = "#800000"  # Dark red
+                    
+                    # Plot the marker
+                    ax.scatter([tx_time], [y_value], 
+                             s=120,  # Size
+                             c=color, 
+                             marker=marker,
+                             edgecolors=edge_color,
+                             linewidth=2,
+                             alpha=0.9,
+                             zorder=10)  # High z-order to show on top
+                    
+                    # Add hover-like annotation (smaller for multiple coins)
+                    if is_single_chart:
+                        # Detailed annotation for single coin
+                        annotation_text = f"{tx_type.upper()}\n{tx_amount:.3f} @ ${tx_price:.4f}\nTotal: ${tx_total:.2f}"
+                        fontsize = 8
+                        offset = (15, 15) if tx_type == "buy" else (15, -25)
+                    else:
+                        # Compact annotation for multiple coins
+                        annotation_text = f"{tx_type.upper()}\n{tx_amount:.1f} @ ${tx_price:.3f}"
+                        fontsize = 7
+                        offset = (10, 10) if tx_type == "buy" else (10, -20)
+                    
+                    # Add annotation with transaction details
+                    ax.annotate(annotation_text,
+                               xy=(tx_time, y_value),
+                               xytext=offset,
+                               textcoords='offset points',
+                               bbox=dict(boxstyle='round,pad=0.3', 
+                                       facecolor=color, 
+                                       alpha=0.7,
+                                       edgecolor=edge_color),
+                               fontsize=fontsize,
+                               color='white',
+                               weight='bold',
+                               ha='center')
+                    
+        except Exception as e:
+            print(f"Error adding transaction markers: {e}")
+            # Don't fail the whole chart if transaction markers fail
+    
+    @staticmethod
+    def _interpolate_chart_value(tx_time: datetime, chart_times: List[datetime], 
+                               chart_plot_values: List[float], chart_prices: List[float], 
+                               is_single_chart: bool) -> Optional[float]:
+        """Interpolate the chart value at transaction time"""
+        try:
+            # Find the two closest time points
+            closest_idx = None
+            min_diff = float('inf')
+            
+            for i, chart_time in enumerate(chart_times):
+                diff = abs((tx_time - chart_time).total_seconds())
+                if diff < min_diff:
+                    min_diff = diff
+                    closest_idx = i
+            
+            if closest_idx is None:
+                return None
+            
+            # If transaction time is very close to a chart point, use that value
+            if min_diff < 300:  # Within 5 minutes
+                return chart_plot_values[closest_idx]
+            
+            # Linear interpolation between two closest points
+            if closest_idx == 0:
+                # Before first point
+                return chart_plot_values[0]
+            elif closest_idx == len(chart_times) - 1:
+                # After last point  
+                return chart_plot_values[-1]
+            else:
+                # Interpolate between closest_idx-1 and closest_idx+1
+                before_idx = closest_idx - 1
+                after_idx = closest_idx + 1
+                
+                t1, t2 = chart_times[before_idx], chart_times[after_idx]
+                v1, v2 = chart_plot_values[before_idx], chart_plot_values[after_idx]
+                
+                # Linear interpolation
+                time_ratio = (tx_time - t1).total_seconds() / (t2 - t1).total_seconds()
+                interpolated_value = v1 + (v2 - v1) * time_ratio
+                
+                return interpolated_value
+                
+        except Exception as e:
+            print(f"Error interpolating chart value: {e}")
+            return None
+    
+    @staticmethod
+    def _add_transaction_legend(ax):
+        """Add legend for transaction markers"""
+        try:
+            # Create custom legend elements for buy/sell markers
+            from matplotlib.patches import Patch
+            from matplotlib.lines import Line2D
+            
+            legend_elements = [
+                Line2D([0], [0], marker='^', color='w', markerfacecolor='#00FF00', 
+                       markersize=8, label='Buy Transaction', linestyle='None'),
+                Line2D([0], [0], marker='v', color='w', markerfacecolor='#FF0000', 
+                       markersize=8, label='Sell Transaction', linestyle='None')
+            ]
+            
+            # Add legend in bottom right corner
+            ax.legend(handles=legend_elements, loc='lower right', fontsize=8, 
+                     framealpha=0.8, facecolor='black', edgecolor='white')
+            
+        except Exception as e:
+            print(f"Error adding transaction legend: {e}")

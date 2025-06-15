@@ -111,11 +111,7 @@ class CryptoManager:
                 for update in price_updates:
                     ticker = update["ticker"]
                     new_price = update["price"]
-                    
-                    # Get old price for change calculation
-                    coin = await CryptoModels.get_coin(ticker)
-                    old_price = coin["current_price"] if coin else new_price
-                    change_percent = ((new_price - old_price) / old_price) * 100 if old_price > 0 else 0
+                    change_percent = update.get("change_percent", 0)
                     
                     print(f"🧠 {ticker}: ${new_price:.6f} ({change_percent:+.2f}%)")
                 
