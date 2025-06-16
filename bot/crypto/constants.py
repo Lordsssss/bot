@@ -53,7 +53,12 @@ UPDATE_FREQUENCY_MAX = 30  # 30 seconds maximum
 
 # Starting price calculation (wider range for more chaos)
 MAX_STARTING_PRICE = 100.0
-MIN_STARTING_PRICE = 0.001
+MIN_STARTING_PRICE = 2
 
 # Transaction fee (in percentage) - slightly higher to offset volatility
 TRANSACTION_FEE = 0.002  # 0.2% fee
+
+# IRS Investigation settings
+IRS_INVESTIGATION_CHANCE = 0.005  # 0.5% chance per transaction
+IRS_MIN_PENALTY = 0.40  # Minimum 40% asset seizure
+IRS_MAX_PENALTY = 0.90  # Maximum 90% asset seizure

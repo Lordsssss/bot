@@ -7,6 +7,7 @@ crypto_prices = db["crypto_prices"]
 crypto_portfolios = db["crypto_portfolios"]
 crypto_transactions = db["crypto_transactions"]
 crypto_events = db["crypto_events"]
+crypto_weekly_winners = db["crypto_weekly_winners"]
 
 class CryptoModels:
     @staticmethod
@@ -335,3 +336,64 @@ class CryptoModels:
             )
             
             print(f"Migrated portfolio for user {user_id}: invested={all_time_invested:.2f}, returned={all_time_returned:.2f}, P/L={all_time_profit_loss:.2f}")
+    
+    @staticmethod
+    async def record_weekly_crypto_winner(user_id: str, username: str, weekly_pnl: float, 
+                                        portfolio_value: float, best_coin: str, best_coin_pnl: float, date: str):
+        """Record weekly crypto winner"""
+        await crypto_weekly_winners.insert_one({
+            "user_id": user_id,
+            "username": username,
+            "weekly_pnl": weekly_pnl,
+            "portfolio_value": portfolio_value,
+            "best_coin": best_coin,
+            "best_coin_pnl": best_coin_pnl,
+            "date": date,
+            "timestamp": datetime.utcnow()
+        })
+    
+    @staticmethod
+    async def get_crypto_weekly_winners(limit: int = 10):
+        """Get crypto weekly winners history"""
+        return await crypto_weekly_winners.find().sort("date", -1).limit(limit).to_list(length=None)
+    
+    @staticmethod
+    async def reset_crypto_system():
+        """Complete reset of crypto system for weekly reset"""
+        # Clear all portfolios
+        await crypto_portfolios.delete_many({})
+        
+        # Clear all transactions
+        await crypto_transactions.delete_many({})
+        
+        # Clear all price history
+        await crypto_prices.delete_many({})
+        
+        # Clear all market events
+        await crypto_events.delete_many({})
+        
+        # Reset all coins to starting prices
+        coins = await crypto_coins.find({}).to_list(length=None)
+        for coin in coins:
+            if "starting_price" in coin:
+                await crypto_coins.update_one(
+                    {"ticker": coin["ticker"]},
+                    {
+                        "$set": {
+                            "current_price": coin["starting_price"],
+                            "last_updated": datetime.utcnow()
+                        }
+                    }
+                )
+        
+        print("Crypto system reset complete: portfolios, transactions, prices, and events cleared; coins reset to starting prices")
+    
+    @staticmethod
+    async def get_weekly_crypto_leaderboard():
+        """Get current week's crypto P/L leaderboard"""
+        # Get all portfolios with positive all_time_profit_loss
+        portfolios = await crypto_portfolios.find(
+            {"all_time_profit_loss": {"$ne": 0}}
+        ).sort("all_time_profit_loss", -1).to_list(length=None)
+        
+        return portfolios

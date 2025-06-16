@@ -6,17 +6,20 @@ from discord import Interaction
 from datetime import datetime
 
 from bot.crypto.portfolio import PortfolioManager
-from bot.crypto.constants import TRANSACTION_FEE
+from bot.crypto.constants import TRANSACTION_FEE, IRS_INVESTIGATION_CHANCE
 from bot.utils.discord_helpers import (
     check_channel_permission, create_embed, send_error_response,
     format_crypto_amount
 )
 from bot.utils.crypto_helpers import (
-    validate_ticker, validate_amount, get_available_tickers_string
+    validate_ticker, validate_amount, get_available_tickers_string,
+    format_money, trigger_irs_investigation
 )
+from bot.db.user import get_user, update_user_points
+import random
 
 
-async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: float):
+async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
     """Buy cryptocurrency with points"""
     if not await check_channel_permission(interaction):
         return
@@ -25,9 +28,24 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: float
         await interaction.response.defer()
         
         ticker = ticker.upper()
+        user_id = str(interaction.user.id)
+        
+        # Handle "all" amount
+        if amount.lower() == "all":
+            user = await get_user(user_id)
+            amount_float = float(user.get("points", 0))
+            if amount_float < 1.0:
+                await send_error_response(interaction, "You need at least 1 point to buy crypto!")
+                return
+        else:
+            try:
+                amount_float = float(amount)
+            except ValueError:
+                await send_error_response(interaction, "Amount must be a number or 'all'!")
+                return
         
         # Validate inputs
-        is_valid_amount, amount_error = validate_amount(amount, min_amount=1.0)
+        is_valid_amount, amount_error = validate_amount(amount_float, min_amount=1.0)
         if not is_valid_amount:
             await send_error_response(interaction, amount_error)
             return
@@ -36,12 +54,78 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: float
             await send_error_response(interaction, f"Crypto {ticker} not found!\nAvailable: {get_available_tickers_string()}")
             return
         
+        # Check for IRS investigation BEFORE purchase
+        irs_investigation = None
+        if random.random() < IRS_INVESTIGATION_CHANCE:
+            irs_investigation = trigger_irs_investigation()
+        
         # Execute purchase
-        user_id = str(interaction.user.id)
-        result = await PortfolioManager.buy_crypto(user_id, ticker, amount)
+        result = await PortfolioManager.buy_crypto(user_id, ticker, amount_float)
         
         if result["success"]:
             details = result["details"]
+            
+            # If IRS investigation triggered, apply penalty AFTER successful purchase
+            if irs_investigation:
+                penalty_percent = irs_investigation["penalty_percent"]
+                
+                # Get current user state after purchase
+                user = await get_user(user_id)
+                current_points = user.get("points", 0)
+                
+                # Get portfolio to calculate crypto value
+                from bot.crypto.models import CryptoModels
+                portfolio = await CryptoModels.get_user_portfolio(user_id)
+                total_crypto_value = 0
+                
+                holdings = portfolio.get("holdings", {})
+                for hold_ticker, hold_amount in holdings.items():
+                    coin = await CryptoModels.get_coin(hold_ticker)
+                    if coin:
+                        total_crypto_value += hold_amount * coin["current_price"]
+                
+                # Calculate penalties
+                points_penalty = current_points * penalty_percent
+                crypto_penalty_percent = penalty_percent
+                
+                # Apply points penalty
+                await update_user_points(user_id, -points_penalty)
+                
+                # Apply crypto penalty by reducing all holdings
+                for hold_ticker, hold_amount in holdings.items():
+                    new_amount = hold_amount * (1 - crypto_penalty_percent)
+                    amount_to_remove = hold_amount - new_amount
+                    
+                    # Update portfolio to remove crypto
+                    await CryptoModels.update_portfolio(
+                        user_id=user_id,
+                        ticker=hold_ticker,
+                        amount=-amount_to_remove,
+                        cost_change=0,
+                        is_buy=False,
+                        sale_value=0  # IRS seizure, no sale value
+                    )
+                
+                # Send IRS investigation embed
+                irs_embed = create_embed(
+                    title="🚨 IRS INVESTIGATION!",
+                    description=irs_investigation["message"],
+                    color=0xff0000,
+                    fields=[{
+                        "name": "💸 Assets Seized",
+                        "value": (
+                            f"**Points Lost:** {format_money(points_penalty)}\n"
+                            f"**Crypto Reduced:** {penalty_percent*100:.1f}% of all holdings\n"
+                            f"**Total Value Lost:** ~{format_money(points_penalty + (total_crypto_value * penalty_percent))}"
+                        ),
+                        "inline": False
+                    }]
+                )
+                await interaction.followup.send(embed=irs_embed)
+                
+                # Update remaining points in details
+                updated_user = await get_user(user_id)
+                details["remaining_points"] = updated_user.get("points", 0)
             
             embed = create_embed(
                 title="✅ Purchase Successful!",
@@ -51,10 +135,10 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: float
                     "name": "Transaction Details",
                     "value": (
                         f"**Coins Received:** {format_crypto_amount(details['coins_received'])} {ticker}\n"
-                        f"**Price per Coin:** ${details['price_per_coin']:.4f}\n"
-                        f"**Total Cost:** {details['total_cost']} points\n"
-                        f"**Transaction Fee:** {details['fee']:.2f} points ({TRANSACTION_FEE*100}%)\n"
-                        f"**Remaining Points:** {details['remaining_points']:.2f}"
+                        f"**Price per Coin:** {format_money(details['price_per_coin'])}\n"
+                        f"**Total Cost:** {format_money(details['total_cost'])}\n"
+                        f"**Transaction Fee:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
+                        f"**Remaining Points:** {format_money(details['remaining_points'])}"
                     ),
                     "inline": False
                 }]
@@ -77,6 +161,7 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
         await interaction.response.defer()
         
         ticker = ticker.upper()
+        user_id = str(interaction.user.id)
         
         # Validate inputs
         is_valid_amount, amount_error = validate_amount(amount)
@@ -88,12 +173,79 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
             await send_error_response(interaction, f"Crypto {ticker} not found!\nAvailable: {get_available_tickers_string()}")
             return
         
+        # Check for IRS investigation BEFORE sale
+        irs_investigation = None
+        if random.random() < IRS_INVESTIGATION_CHANCE:
+            irs_investigation = trigger_irs_investigation()
+        
         # Execute sale
-        user_id = str(interaction.user.id)
         result = await PortfolioManager.sell_crypto(user_id, ticker, amount)
         
         if result["success"]:
             details = result["details"]
+            
+            # If IRS investigation triggered, apply penalty AFTER successful sale
+            if irs_investigation:
+                penalty_percent = irs_investigation["penalty_percent"]
+                
+                # Get current user state after sale
+                user = await get_user(user_id)
+                current_points = user.get("points", 0)
+                
+                # Get portfolio to calculate crypto value
+                from bot.crypto.models import CryptoModels
+                portfolio = await CryptoModels.get_user_portfolio(user_id)
+                total_crypto_value = 0
+                
+                holdings = portfolio.get("holdings", {})
+                for hold_ticker, hold_amount in holdings.items():
+                    coin = await CryptoModels.get_coin(hold_ticker)
+                    if coin:
+                        total_crypto_value += hold_amount * coin["current_price"]
+                
+                # Calculate penalties
+                points_penalty = current_points * penalty_percent
+                crypto_penalty_percent = penalty_percent
+                
+                # Apply points penalty
+                await update_user_points(user_id, -points_penalty)
+                
+                # Apply crypto penalty by reducing all holdings
+                for hold_ticker, hold_amount in holdings.items():
+                    new_amount = hold_amount * (1 - crypto_penalty_percent)
+                    amount_to_remove = hold_amount - new_amount
+                    
+                    if amount_to_remove > 0:
+                        # Update portfolio to remove crypto
+                        await CryptoModels.update_portfolio(
+                            user_id=user_id,
+                            ticker=hold_ticker,
+                            amount=-amount_to_remove,
+                            cost_change=0,
+                            is_buy=False,
+                            sale_value=0  # IRS seizure, no sale value
+                        )
+                
+                # Send IRS investigation embed
+                irs_embed = create_embed(
+                    title="🚨 IRS INVESTIGATION!",
+                    description=irs_investigation["message"],
+                    color=0xff0000,
+                    fields=[{
+                        "name": "💸 Assets Seized",
+                        "value": (
+                            f"**Points Lost:** {format_money(points_penalty)}\n"
+                            f"**Crypto Reduced:** {penalty_percent*100:.1f}% of all holdings\n"
+                            f"**Total Value Lost:** ~{format_money(points_penalty + (total_crypto_value * penalty_percent))}"
+                        ),
+                        "inline": False
+                    }]
+                )
+                await interaction.followup.send(embed=irs_embed)
+                
+                # Update new points in details
+                updated_user = await get_user(user_id)
+                details["new_points"] = updated_user.get("points", 0)
             
             embed = create_embed(
                 title="✅ Sale Successful!",
@@ -103,11 +255,11 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
                     "name": "Transaction Details",
                     "value": (
                         f"**Coins Sold:** {details['coins_sold']} {ticker}\n"
-                        f"**Price per Coin:** ${details['price_per_coin']:.4f}\n"
-                        f"**Gross Value:** {details['gross_value']:.2f} points\n"
-                        f"**Transaction Fee:** {details['fee']:.2f} points ({TRANSACTION_FEE*100}%)\n"
-                        f"**Net Received:** {details['net_value']:.2f} points\n"
-                        f"**New Balance:** {details['new_points']:.2f} points"
+                        f"**Price per Coin:** {format_money(details['price_per_coin'])}\n"
+                        f"**Gross Value:** {format_money(details['gross_value'])}\n"
+                        f"**Transaction Fee:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
+                        f"**Net Received:** {format_money(details['net_value'])}\n"
+                        f"**New Balance:** {format_money(details['new_points'])}"
                     ),
                     "inline": False
                 }]
@@ -138,10 +290,10 @@ async def handle_crypto_sell_all(interaction: Interaction):
             fields = [{
                 "name": "💰 Sale Summary",
                 "value": (
-                    f"**Total Value:** {details['total_value']:.2f} points\n"
-                    f"**Total Fee:** {details['total_fee']:.2f} points\n"
+                    f"**Total Value:** {format_money(details['total_value'])}\n"
+                    f"**Total Fee:** {format_money(details['total_fee'])}\n"
                     f"**Coins Sold:** {details['coins_sold']} different types\n"
-                    f"**New Balance:** {details['new_points']:.2f} points"
+                    f"**New Balance:** {format_money(details['new_points'])}"
                 ),
                 "inline": False
             }]
@@ -150,7 +302,7 @@ async def handle_crypto_sell_all(interaction: Interaction):
             if len(details['sold_holdings']) <= 8:
                 breakdown_text = ""
                 for holding in details['sold_holdings']:
-                    breakdown_text += f"**{holding['ticker']}:** {format_crypto_amount(holding['amount'])} @ ${holding['price']:.4f} = {holding['value']:.2f} pts\n"
+                    breakdown_text += f"**{holding['ticker']}:** {format_crypto_amount(holding['amount'])} @ {format_money(holding['price'])} = {format_money(holding['value'])}\n"
                 
                 fields.append({
                     "name": "📋 Holdings Sold",

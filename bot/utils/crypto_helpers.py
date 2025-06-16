@@ -3,6 +3,7 @@ Crypto utility functions for common operations
 """
 from typing import Dict, List, Any, Optional
 from bot.crypto.constants import CRYPTO_COINS, MARKET_EVENTS
+import random
 
 
 def validate_ticker(ticker: str) -> bool:
@@ -20,6 +21,16 @@ def get_available_tickers_string() -> str:
     return ", ".join(get_available_tickers())
 
 
+def format_money(amount: float) -> str:
+    """Format money with commas and $ sign"""
+    if amount >= 1000000:
+        return f"${amount:,.2f}"
+    elif amount >= 1000:
+        return f"${amount:,.2f}"
+    else:
+        return f"${amount:.2f}"
+
+
 def validate_amount(amount: float, min_amount: float = 0.001) -> tuple[bool, str]:
     """Validate trading amount"""
     if amount <= 0:
@@ -27,6 +38,20 @@ def validate_amount(amount: float, min_amount: float = 0.001) -> tuple[bool, str
     if amount < min_amount:
         return False, f"Minimum amount is {min_amount}!"
     return True, ""
+
+
+def trigger_irs_investigation() -> dict:
+    """Trigger IRS investigation with random penalty"""
+    penalty_percent = random.uniform(0.40, 0.90)  # 40-90% penalty
+    return {
+        "triggered": True,
+        "penalty_percent": penalty_percent,
+        "message": f"🚨 **IRS INVESTIGATION TRIGGERED!** 🚨\n\n"
+                  f"The IRS has flagged your suspicious trading activity!\n"
+                  f"**Asset Seizure:** {penalty_percent*100:.1f}% of all assets!\n"
+                  f"Your crypto holdings and points balance have been reduced.\n\n"
+                  f"*Always report your crypto gains to the IRS!* 📋"
+    }
 
 
 def get_event_mapping() -> Dict[str, str]:
@@ -66,13 +91,13 @@ def find_event_by_message(target_message: str) -> Optional[Dict[str, Any]]:
 def calculate_portfolio_summary(portfolio_data: Dict[str, Any]) -> Dict[str, str]:
     """Calculate formatted portfolio summary strings"""
     return {
-        "current_value": f"{portfolio_data['total_value']:.2f}",
-        "current_invested": f"{portfolio_data['total_invested']:.2f}",
-        "current_pl": f"{portfolio_data['profit_loss']:+.2f}",
+        "current_value": format_money(portfolio_data['total_value']),
+        "current_invested": format_money(portfolio_data['total_invested']),
+        "current_pl": format_money(portfolio_data['profit_loss']),
         "current_pl_percent": f"{portfolio_data['profit_loss_percent']:+.2f}%",
-        "all_time_invested": f"{portfolio_data['all_time_invested']:.2f}",
-        "all_time_returned": f"{portfolio_data['all_time_returned']:.2f}",
-        "all_time_pl": f"{portfolio_data['all_time_profit_loss']:+.2f}",
+        "all_time_invested": format_money(portfolio_data['all_time_invested']),
+        "all_time_returned": format_money(portfolio_data['all_time_returned']),
+        "all_time_pl": format_money(portfolio_data['all_time_profit_loss']),
         "all_time_pl_percent": f"{portfolio_data['all_time_profit_loss_percent']:+.2f}%"
     }
 
@@ -86,8 +111,8 @@ def format_holdings_display(holdings: Dict[str, Dict[str, Any]]) -> str:
     for ticker, holding in holdings.items():
         holdings_text += f"**{ticker}** ({holding['coin_name']})\n"
         holdings_text += f"  Amount: {holding['amount']:.3f}\n"
-        holdings_text += f"  Price: ${holding['current_price']:.4f}\n"
-        holdings_text += f"  Value: {holding['value']:.2f} points\n\n"
+        holdings_text += f"  Price: {format_money(holding['current_price'])}\n"
+        holdings_text += f"  Value: {format_money(holding['value'])}\n\n"
     
     return holdings_text
 
@@ -104,7 +129,7 @@ def format_transaction_history(transactions: List[Dict[str, Any]]) -> str:
         time_str = tx["timestamp"].strftime("%m/%d %H:%M")
         
         history_text += f"{action_emoji} **{action}** {tx['amount']:.3f} {tx['ticker']}\n"
-        history_text += f"   Price: ${tx['price']:.4f} | Total: {tx['total_cost']:.2f} pts | {time_str}\n\n"
+        history_text += f"   Price: {format_money(tx['price'])} | Total: {format_money(tx['total_cost'])} | {time_str}\n\n"
     
     return history_text
 
@@ -117,7 +142,7 @@ def format_leaderboard_entry(position: int, username: str, trader_data: Dict[str
     status_emoji = get_trading_status_emoji(trader_data['current_holdings'] > 0)
     
     entry = f"{medal} **{username}**\n"
-    entry += f"   All-Time P/L: {trader_data['all_time_profit_loss']:+.2f} pts ({trader_data['all_time_profit_loss_percent']:+.2f}%)\n"
+    entry += f"   All-Time P/L: {format_money(trader_data['all_time_profit_loss'])} ({trader_data['all_time_profit_loss_percent']:+.2f}%)\n"
     
     if trader_data['current_holdings'] > 0:
         entry += f"   Status: {status_emoji} Active ({trader_data['current_holdings']} holdings)\n\n"

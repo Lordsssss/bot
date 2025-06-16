@@ -59,9 +59,9 @@ async def crypto_analysis(interaction: Interaction, ticker: str = None):
 # Trading Commands
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
-    amount="Amount of points to spend"
+    amount="Amount of points to spend (or 'all' to spend all available points)"
 )
-async def crypto_buy(interaction: Interaction, ticker: str, amount: float):
+async def crypto_buy(interaction: Interaction, ticker: str, amount: str):
     """Buy cryptocurrency with your points"""
     await handle_crypto_buy(interaction, ticker, amount)
 

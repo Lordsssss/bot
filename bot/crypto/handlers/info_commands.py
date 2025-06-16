@@ -17,7 +17,8 @@ from bot.utils.discord_helpers import (
 )
 from bot.utils.crypto_helpers import (
     validate_ticker, get_available_tickers_string, format_holdings_display,
-    format_transaction_history, format_leaderboard_entry, calculate_portfolio_summary
+    format_transaction_history, format_leaderboard_entry, calculate_portfolio_summary,
+    format_money
 )
 
 
@@ -48,7 +49,7 @@ async def handle_crypto_prices(interaction: Interaction):
             change_emoji = "📈" if len(price_history) < 2 else ("📈" if price > price_history[0]['price'] else "📉")
             
             price_list += f"{change_emoji} **{ticker}** ({name})\n"
-            price_list += f"    💰 ${price:.4f}\n\n"
+            price_list += f"    💰 {format_money(price)}\n\n"
         
         embed = create_embed(
             title="🪙 Crypto Market Prices",
