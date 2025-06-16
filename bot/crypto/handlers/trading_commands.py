@@ -15,14 +15,15 @@ from bot.utils.crypto_helpers import (
     validate_ticker, validate_amount, get_available_tickers_string,
     format_money, trigger_irs_investigation
 )
+from bot.crypto.trigger_orders import create_trigger_order
 from bot.db.user import get_user, update_user_points
 from bot.db.server_config import get_server_language
 from bot.utils.translations import get_text
 import random
 
 
-async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
-    """Buy cryptocurrency with points"""
+async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str, trigger_price: float = None):
+    """Buy cryptocurrency with points and optionally set trigger order"""
     if not await check_channel_permission(interaction):
         return
     
@@ -154,6 +155,30 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
             )
             
             await interaction.followup.send(embed=embed)
+            
+            # If trigger price specified, create trigger order
+            if trigger_price and trigger_price > 0:
+                trigger_result = await create_trigger_order(
+                    user_id, 
+                    ticker, 
+                    trigger_price, 
+                    details["coins_received"]
+                )
+                
+                if trigger_result["success"]:
+                    trigger_embed = create_embed(
+                        title="🎯 Trigger Order Set!",
+                        description=f"Automatic sell order created: {format_crypto_amount(details['coins_received'])} {ticker} at {format_money(trigger_price)}",
+                        color=0x3498db,
+                        footer="Your crypto will automatically sell when the price hits the trigger level"
+                    )
+                    await interaction.followup.send(embed=trigger_embed)
+                else:
+                    # Don't fail the whole transaction, just notify about trigger failure
+                    await interaction.followup.send(
+                        f"⚠️ Purchase successful but trigger order failed: {trigger_result['message']}", 
+                        ephemeral=True
+                    )
         else:
             await send_error_response(interaction, result["message"])
             

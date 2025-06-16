@@ -126,6 +126,28 @@ def _register_crypto_commands():
         description="Sell all your cryptocurrency holdings at once"
     ))
     
+    # Trigger order commands
+    crypto_group.add_command(app_commands.Command(
+        name="trigger-set", 
+        callback=crypto.crypto_trigger_set, 
+        description="Set a trigger order to automatically sell when price hits target"
+    ))
+    crypto_group.add_command(app_commands.Command(
+        name="triggers-list", 
+        callback=crypto.crypto_triggers_list, 
+        description="List your active trigger orders"
+    ))
+    crypto_group.add_command(app_commands.Command(
+        name="trigger-cancel", 
+        callback=crypto.crypto_trigger_cancel, 
+        description="Cancel a trigger order"
+    ))
+    crypto_group.add_command(app_commands.Command(
+        name="triggers-market", 
+        callback=crypto.crypto_triggers_market, 
+        description="[ADMIN] View market-wide trigger order summary"
+    ))
+    
     # Admin commands
     crypto_group.add_command(app_commands.Command(
         name="adminevent", 

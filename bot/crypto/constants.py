@@ -55,6 +55,9 @@ UPDATE_FREQUENCY_MAX = 30  # 30 seconds maximum
 MAX_STARTING_PRICE = 100.0
 MIN_STARTING_PRICE = 2
 
+# Price floor - coins cannot go below this price
+MINIMUM_PRICE_FLOOR = 0.10
+
 # Transaction fee (in percentage) - slightly higher to offset volatility
 TRANSACTION_FEE = 0.002  # 0.2% fee
 

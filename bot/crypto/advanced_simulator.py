@@ -8,7 +8,8 @@ from typing import Dict, List, Optional
 from .data_fetcher import CryptoDataFetcher, PatternAnalyzer
 from .win_rate_balancer import WinRateBalancer
 from .models import CryptoModels
-from .constants import CRYPTO_COINS
+from .constants import CRYPTO_COINS, MINIMUM_PRICE_FLOOR
+from .trigger_orders import check_and_execute_triggers
 import math
 
 class AdvancedCryptoSimulator:
@@ -144,6 +145,16 @@ class AdvancedCryptoSimulator:
                     update["price"], 
                     update["timestamp"]
                 )
+                
+                # Check and execute trigger orders for this price update
+                executed_triggers = await check_and_execute_triggers(
+                    update["ticker"], 
+                    update["price"]
+                )
+                
+                # Log executed triggers for monitoring
+                if executed_triggers:
+                    print(f"🎯 Executed {len(executed_triggers)} trigger orders for {update['ticker']} at ${update['price']:.4f}")
             
             return price_updates
             
@@ -200,8 +211,8 @@ class AdvancedCryptoSimulator:
             max_price = current_price * 100    # Max 10,000% gain
             new_price = max(min_price, min(new_price, max_price))
             
-            # Ensure minimum price
-            new_price = max(new_price, 0.0001)
+            # Ensure minimum price floor ($0.10)
+            new_price = max(new_price, MINIMUM_PRICE_FLOOR)
             
             # Update pattern state
             if pattern_data:

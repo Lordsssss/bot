@@ -11,6 +11,10 @@ from bot.crypto.handlers.info_commands import (
 from bot.crypto.handlers.trading_commands import (
     handle_crypto_buy, handle_crypto_sell, handle_crypto_sell_all
 )
+from bot.crypto.handlers.trigger_commands import (
+    handle_crypto_trigger_set, handle_crypto_triggers_list, 
+    handle_crypto_trigger_cancel, handle_crypto_triggers_market
+)
 from bot.crypto.handlers.admin_commands import handle_crypto_admin_event, handle_crypto_admin_migrate
 
 
@@ -59,11 +63,12 @@ async def crypto_analysis(interaction: Interaction, ticker: str = None):
 # Trading Commands
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
-    amount="Amount of points to spend (or 'all' to spend all available points)"
+    amount="Amount of points to spend (or 'all' to spend all available points)",
+    trigger_price="Optional: Set automatic sell trigger when price hits this level"
 )
-async def crypto_buy(interaction: Interaction, ticker: str, amount: str):
-    """Buy cryptocurrency with your points"""
-    await handle_crypto_buy(interaction, ticker, amount)
+async def crypto_buy(interaction: Interaction, ticker: str, amount: str, trigger_price: float = None):
+    """Buy cryptocurrency with your points (with optional trigger order)"""
+    await handle_crypto_buy(interaction, ticker, amount, trigger_price)
 
 
 @app_commands.describe(
@@ -79,6 +84,37 @@ async def crypto_sell(interaction: Interaction, ticker: str, amount: float):
 async def crypto_sell_all(interaction: Interaction):
     """Sell all your cryptocurrency holdings at once"""
     await handle_crypto_sell_all(interaction)
+
+
+# Trigger Order Commands
+@app_commands.describe(
+    ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
+    amount="Amount of crypto to sell when triggered",
+    trigger_price="Price level that triggers the sell order"
+)
+async def crypto_trigger_set(interaction: Interaction, ticker: str, amount: float, trigger_price: float):
+    """Set a trigger order to automatically sell when price hits target"""
+    await handle_crypto_trigger_set(interaction, ticker, amount, trigger_price)
+
+
+@app_commands.describe()
+async def crypto_triggers_list(interaction: Interaction):
+    """List your active trigger orders"""
+    await handle_crypto_triggers_list(interaction)
+
+
+@app_commands.describe(
+    order_number="Order number to cancel (from /crypto triggers-list)"
+)
+async def crypto_trigger_cancel(interaction: Interaction, order_number: int):
+    """Cancel a trigger order"""
+    await handle_crypto_trigger_cancel(interaction, order_number)
+
+
+@app_commands.describe()
+async def crypto_triggers_market(interaction: Interaction):
+    """[ADMIN] View market-wide trigger order summary"""
+    await handle_crypto_triggers_market(interaction)
 
 
 # Admin Commands

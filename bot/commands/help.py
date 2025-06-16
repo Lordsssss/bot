@@ -51,13 +51,18 @@ async def help_command(interaction: Interaction):
 **📈 Trading Crypto**
 `/crypto prices` - Prix actuels des cryptos
 `/crypto charts <ticker>` - Graphiques de prix
-`/crypto buy <ticker> <montant|all>` - Acheter des cryptos
+`/crypto buy <ticker> <montant|all> [prix_déclencheur]` - Acheter des cryptos
 `/crypto sell <ticker> <montant>` - Vendre des cryptos
 `/crypto sellall` - Vendre toutes les cryptos
 `/crypto portfolio` - Voir votre portefeuille
 `/crypto leaderboard` - Classement crypto
 `/crypto history` - Historique des transactions
 `/crypto analysis` - Analyse de marché détaillée
+
+**🎯 Ordres de Déclenchement**
+`/crypto trigger-set <ticker> <montant> <prix>` - Créer ordre de vente automatique
+`/crypto triggers-list` - Voir vos ordres actifs
+`/crypto trigger-cancel <numéro>` - Annuler un ordre
 """
             
             # Admin Commands
@@ -75,8 +80,10 @@ async def help_command(interaction: Interaction):
             features = """
 **✨ Fonctionnalités Spéciales**
 • 🚨 **Enquêtes IRS** - 0.5% de chance lors des trades (perte 40-90% des actifs)
-• 💰 **Format Monétaire** - Affichage professionnel ($1,234.56)
+• 💰 **Format Monétaire** - Affichage professionnel ($1,234.56)  
 • 🎯 **"All In"** - Utilisez tous vos points avec `all`
+• 🎯 **Ordres de Déclenchement** - Vente automatique au prix cible
+• 💎 **Prix Minimum** - Les cryptos ne descendent jamais sous $0.10
 • 📊 **Système P/L** - Suivi des profits/pertes historiques
 • 🔄 **Remise à Zéro Hebdomadaire** - Champions points + crypto
 • 🌐 **Multi-Serveur** - Configuration par serveur
@@ -114,13 +121,18 @@ async def help_command(interaction: Interaction):
 **📈 Crypto Trading**
 `/crypto prices` - Current crypto prices
 `/crypto charts <ticker>` - Price charts
-`/crypto buy <ticker> <amount|all>` - Buy cryptocurrency
+`/crypto buy <ticker> <amount|all> [trigger_price]` - Buy cryptocurrency
 `/crypto sell <ticker> <amount>` - Sell cryptocurrency
 `/crypto sellall` - Sell all crypto holdings
 `/crypto portfolio` - View your portfolio
 `/crypto leaderboard` - Crypto leaderboard
 `/crypto history` - Transaction history
 `/crypto analysis` - Detailed market analysis
+
+**🎯 Trigger Orders**
+`/crypto trigger-set <ticker> <amount> <price>` - Create automatic sell order
+`/crypto triggers-list` - View your active orders
+`/crypto trigger-cancel <number>` - Cancel an order
 """
             
             # Admin Commands
@@ -140,6 +152,8 @@ async def help_command(interaction: Interaction):
 • 🚨 **IRS Investigations** - 0.5% chance on trades (40-90% asset loss)
 • 💰 **Money Formatting** - Professional display ($1,234.56)
 • 🎯 **"All In"** - Use all points with `all`
+• 🎯 **Trigger Orders** - Automatic selling at target price
+• 💎 **Price Floor** - Cryptos never go below $0.10
 • 📊 **P/L Tracking** - Historical profit/loss tracking
 • 🔄 **Weekly Reset** - Points + crypto champions
 • 🌐 **Multi-Server** - Per-server configuration
