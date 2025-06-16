@@ -94,9 +94,8 @@ async def perform_weekly_reset(client, channel=None):
         embed.set_footer(text="All systems have been reset for a fresh start!")
         await channel.send(embed=embed)
 
-        # Reset all systems
-        await users.update_many({"points": {"$lt": 1000}}, {"$set": {"points": 1000}})
-        await users.update_many({}, {"$set": {"weekly_spent": 0}})
+        # Reset all systems - ALL users get reset to 1000 points
+        await users.update_many({}, {"$set": {"points": 1000, "weekly_spent": 0}})
         await CryptoModels.reset_crypto_system()
         
         print("Weekly reset complete: points reset, crypto system wiped, winners recorded.")
