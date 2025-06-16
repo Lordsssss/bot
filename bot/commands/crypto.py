@@ -64,11 +64,11 @@ async def crypto_analysis(interaction: Interaction, ticker: str = None):
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
     amount="Amount of points to spend (or 'all' to spend all available points)",
-    trigger_price="Optional: Set automatic sell trigger when price hits this level"
+    target_gain_percent="Optional: Set automatic sell trigger at percentage gain (e.g., 25.0 for 25%)"
 )
-async def crypto_buy(interaction: Interaction, ticker: str, amount: str, trigger_price: float = None):
+async def crypto_buy(interaction: Interaction, ticker: str, amount: str, target_gain_percent: float = None):
     """Buy cryptocurrency with your points (with optional trigger order)"""
-    await handle_crypto_buy(interaction, ticker, amount, trigger_price)
+    await handle_crypto_buy(interaction, ticker, amount, target_gain_percent)
 
 
 @app_commands.describe(
@@ -89,12 +89,11 @@ async def crypto_sell_all(interaction: Interaction):
 # Trigger Order Commands
 @app_commands.describe(
     ticker="Crypto ticker symbol (e.g., DOGE2, MEME)",
-    amount="Amount of crypto to sell when triggered",
-    trigger_price="Price level that triggers the sell order"
+    target_gain_percent="Target percentage gain to trigger sell (e.g., 25.0 for 25% gain)"
 )
-async def crypto_trigger_set(interaction: Interaction, ticker: str, amount: float, trigger_price: float):
-    """Set a trigger order to automatically sell when price hits target"""
-    await handle_crypto_trigger_set(interaction, ticker, amount, trigger_price)
+async def crypto_trigger_set(interaction: Interaction, ticker: str, target_gain_percent: float):
+    """Set a trigger order to automatically sell when achieving target percentage gain"""
+    await handle_crypto_trigger_set(interaction, ticker, target_gain_percent)
 
 
 @app_commands.describe()

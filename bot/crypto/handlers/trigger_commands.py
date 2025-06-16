@@ -20,8 +20,8 @@ from bot.db.server_config import get_server_language
 from bot.utils.translations import get_text
 
 
-async def handle_crypto_trigger_set(interaction: Interaction, ticker: str, amount: float, trigger_price: float):
-    """Set a trigger order to automatically sell when price hits target"""
+async def handle_crypto_trigger_set(interaction: Interaction, ticker: str, target_gain_percent: float):
+    """Set a trigger order to automatically sell when achieving target percentage gain"""
     if not await check_channel_permission(interaction):
         return
     
@@ -34,19 +34,14 @@ async def handle_crypto_trigger_set(interaction: Interaction, ticker: str, amoun
         language = await get_server_language(guild_id)
         
         # Validate inputs
-        is_valid_amount, amount_error = validate_amount(amount)
-        if not is_valid_amount:
-            await send_error_response(interaction, amount_error)
-            return
-        
         if not validate_ticker(ticker):
             message = get_text(guild_id, "crypto_not_found", language, 
                              ticker=ticker, available=get_available_tickers_string())
             await send_error_response(interaction, message)
             return
         
-        if trigger_price <= 0:
-            await send_error_response(interaction, "Trigger price must be positive!")
+        if target_gain_percent <= -100:
+            await send_error_response(interaction, "Target gain cannot be -100% or lower!")
             return
         
         # Get current price for reference
@@ -58,9 +53,10 @@ async def handle_crypto_trigger_set(interaction: Interaction, ticker: str, amoun
         current_price = coin["current_price"]
         
         # Create trigger order
-        result = await create_trigger_order(user_id, ticker, trigger_price, amount)
+        result = await create_trigger_order(user_id, ticker, target_gain_percent)
         
         if result["success"]:
+            order = result["order"]
             embed = create_embed(
                 title="🎯 Trigger Order Created!",
                 description=result["message"],
@@ -69,14 +65,16 @@ async def handle_crypto_trigger_set(interaction: Interaction, ticker: str, amoun
                     "name": "Order Details",
                     "value": (
                         f"**Ticker:** {ticker}\n"
-                        f"**Amount:** {format_crypto_amount(amount)} {ticker}\n"
-                        f"**Trigger Price:** {format_money(trigger_price)}\n"
+                        f"**Target Gain:** {target_gain_percent:+.1f}%\n"
+                        f"**Amount to Sell:** {format_crypto_amount(order['amount'])} {ticker} (all holdings)\n"
+                        f"**Average Purchase Price:** {format_money(order['avg_purchase_price'])}\n"
+                        f"**Trigger Price:** {format_money(order['trigger_price'])}\n"
                         f"**Current Price:** {format_money(current_price)}\n"
-                        f"**Price Difference:** {((trigger_price - current_price) / current_price * 100):+.2f}%"
+                        f"**Current Gain:** {((current_price - order['avg_purchase_price']) / order['avg_purchase_price'] * 100):+.2f}%"
                     ),
                     "inline": False
                 }],
-                footer="The order will execute automatically when the price hits your trigger level"
+                footer="The order will execute automatically when the price hits your target gain percentage"
             )
             
             await interaction.followup.send(embed=embed)
@@ -117,19 +115,24 @@ async def handle_crypto_triggers_list(interaction: Interaction):
         
         for i, trigger in enumerate(triggers, 1):
             ticker = trigger["ticker"]
-            amount = trigger["amount"]
+            target_gain = trigger.get("target_gain_percent", 0)
             trigger_price = trigger["trigger_price"]
+            avg_purchase_price = trigger.get("avg_purchase_price", trigger_price)
             created = trigger["created_at"].strftime("%m/%d %H:%M")
             
             # Get current price for comparison
             coin = await CryptoModels.get_coin(ticker)
             current_price = coin["current_price"] if coin else 0
             
-            price_diff = ((trigger_price - current_price) / current_price * 100) if current_price > 0 else 0
-            status_emoji = "🔴" if price_diff > 0 else "🟢"
+            # Calculate current gain vs target gain
+            current_gain = ((current_price - avg_purchase_price) / avg_purchase_price * 100) if avg_purchase_price > 0 else 0
+            progress = (current_gain / target_gain * 100) if target_gain != 0 else 0
             
-            trigger_text += f"{status_emoji} **{ticker}** - {format_crypto_amount(amount)}\n"
-            trigger_text += f"   Trigger: {format_money(trigger_price)} ({price_diff:+.1f}%)\n"
+            status_emoji = "🟢" if current_price >= trigger_price else "🔴"
+            
+            trigger_text += f"{status_emoji} **{ticker}** - Target: {target_gain:+.1f}%\n"
+            trigger_text += f"   Current: {current_gain:+.1f}% ({progress:.0f}% progress)\n"
+            trigger_text += f"   Trigger Price: {format_money(trigger_price)}\n"
             trigger_text += f"   Created: {created}\n\n"
         
         embed = create_embed(

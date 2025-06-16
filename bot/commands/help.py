@@ -51,7 +51,7 @@ async def help_command(interaction: Interaction):
 **📈 Trading Crypto**
 `/crypto prices` - Prix actuels des cryptos
 `/crypto charts <ticker>` - Graphiques de prix
-`/crypto buy <ticker> <montant|all> [prix_déclencheur]` - Acheter des cryptos
+`/crypto buy <ticker> <montant|all> [gain%]` - Acheter des cryptos
 `/crypto sell <ticker> <montant>` - Vendre des cryptos
 `/crypto sellall` - Vendre toutes les cryptos
 `/crypto portfolio` - Voir votre portefeuille
@@ -60,7 +60,7 @@ async def help_command(interaction: Interaction):
 `/crypto analysis` - Analyse de marché détaillée
 
 **🎯 Ordres de Déclenchement**
-`/crypto trigger-set <ticker> <montant> <prix>` - Créer ordre de vente automatique
+`/crypto trigger-set <ticker> <gain%>` - Créer ordre de vente automatique (ex: 25.0 pour 25%)
 `/crypto triggers-list` - Voir vos ordres actifs
 `/crypto trigger-cancel <numéro>` - Annuler un ordre
 """
@@ -121,7 +121,7 @@ async def help_command(interaction: Interaction):
 **📈 Crypto Trading**
 `/crypto prices` - Current crypto prices
 `/crypto charts <ticker>` - Price charts
-`/crypto buy <ticker> <amount|all> [trigger_price]` - Buy cryptocurrency
+`/crypto buy <ticker> <amount|all> [gain%]` - Buy cryptocurrency
 `/crypto sell <ticker> <amount>` - Sell cryptocurrency
 `/crypto sellall` - Sell all crypto holdings
 `/crypto portfolio` - View your portfolio
@@ -130,7 +130,7 @@ async def help_command(interaction: Interaction):
 `/crypto analysis` - Detailed market analysis
 
 **🎯 Trigger Orders**
-`/crypto trigger-set <ticker> <amount> <price>` - Create automatic sell order
+`/crypto trigger-set <ticker> <gain%>` - Create automatic sell order (e.g., 25.0 for 25%)
 `/crypto triggers-list` - View your active orders
 `/crypto trigger-cancel <number>` - Cancel an order
 """

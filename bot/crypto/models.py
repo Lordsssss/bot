@@ -123,10 +123,10 @@ class CryptoModels:
                 cost_basis = updated_portfolio.get("cost_basis", {})
                 holdings = updated_portfolio.get("holdings", {})
                 
-                # Remove entries with zero holdings
+                # Remove entries with truly zero holdings (much more conservative)
                 unset_fields = {}
                 for t, h in holdings.items():
-                    if h <= 0.001:  # Essentially zero due to rounding
+                    if h <= 0.0000001:  # Only remove truly zero holdings (much smaller threshold)
                         unset_fields[f"holdings.{t}"] = ""
                         unset_fields[f"cost_basis.{t}"] = ""
                 

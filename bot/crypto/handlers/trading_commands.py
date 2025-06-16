@@ -22,7 +22,7 @@ from bot.utils.translations import get_text
 import random
 
 
-async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str, trigger_price: float = None):
+async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str, target_gain_percent: float = None):
     """Buy cryptocurrency with points and optionally set trigger order"""
     if not await check_channel_permission(interaction):
         return
@@ -156,21 +156,21 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str, 
             
             await interaction.followup.send(embed=embed)
             
-            # If trigger price specified, create trigger order
-            if trigger_price and trigger_price > 0:
+            # If target gain percentage specified, create trigger order
+            if target_gain_percent is not None and target_gain_percent > -100:
                 trigger_result = await create_trigger_order(
                     user_id, 
                     ticker, 
-                    trigger_price, 
-                    details["coins_received"]
+                    target_gain_percent
                 )
                 
                 if trigger_result["success"]:
+                    order = trigger_result["order"]
                     trigger_embed = create_embed(
                         title="🎯 Trigger Order Set!",
-                        description=f"Automatic sell order created: {format_crypto_amount(details['coins_received'])} {ticker} at {format_money(trigger_price)}",
+                        description=f"Automatic sell order created: All {ticker} holdings at {target_gain_percent:+.1f}% gain (target price: {format_money(order['trigger_price'])})",
                         color=0x3498db,
-                        footer="Your crypto will automatically sell when the price hits the trigger level"
+                        footer="Your crypto will automatically sell when achieving the target percentage gain"
                     )
                     await interaction.followup.send(embed=trigger_embed)
                 else:

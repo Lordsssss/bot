@@ -11,7 +11,7 @@ CRYPTO_COINS = {
     "PUMP": {"name": "PumpToken", "description": "Number go up"},
     "DUMP": {"name": "DumpCoin", "description": "Gravity is real"},
     "MOON": {"name": "MoonRocket", "description": "Destination: Moon"},
-    "Chad": {"name": "ChadCoin", "description": "Alpha energy only"}
+    "CHAD": {"name": "ChadCoin", "description": "Alpha energy only"}
 }
 
 # Market events that can affect prices (MASSIVE impacts, low frequency)

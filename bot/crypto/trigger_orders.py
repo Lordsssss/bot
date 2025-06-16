@@ -9,26 +9,45 @@ from bot.crypto.portfolio import PortfolioManager
 # Collection for trigger orders
 trigger_orders = db["trigger_orders"]
 
-async def create_trigger_order(user_id: str, ticker: str, trigger_price: float, amount: float) -> dict:
-    """Create a new trigger order"""
+async def create_trigger_order(user_id: str, ticker: str, target_gain_percent: float) -> dict:
+    """Create a new trigger order based on percentage gain"""
     try:
-        # Validate user has the crypto to sell
+        # Validate user has the crypto
         portfolio = await CryptoModels.get_user_portfolio(user_id)
         holdings = portfolio.get("holdings", {})
-        current_holding = holdings.get(ticker, 0)
+        cost_basis = portfolio.get("cost_basis", {})
         
-        if current_holding < amount:
+        if ticker not in holdings or holdings[ticker] <= 0:
             return {
                 "success": False,
-                "message": f"Insufficient {ticker}! You have {current_holding:.3f} but want to trigger sell {amount}"
+                "message": f"You don't have any {ticker} to set a trigger for!"
             }
+        
+        current_holding = holdings[ticker]
+        current_cost_basis = cost_basis.get(ticker, 0)
+        
+        if current_cost_basis <= 0:
+            return {
+                "success": False,
+                "message": f"Cannot determine cost basis for {ticker}. Unable to calculate target price."
+            }
+        
+        # Calculate average purchase price and target price
+        avg_purchase_price = current_cost_basis / current_holding
+        target_price = avg_purchase_price * (1 + target_gain_percent / 100)
+        
+        # Get current price for reference
+        coin = await CryptoModels.get_coin(ticker)
+        current_price = coin["current_price"] if coin else 0
         
         # Create trigger order
         order = {
             "user_id": user_id,
             "ticker": ticker,
-            "trigger_price": trigger_price,
-            "amount": amount,
+            "target_gain_percent": target_gain_percent,
+            "trigger_price": target_price,
+            "avg_purchase_price": avg_purchase_price,
+            "amount": current_holding,  # Sell all holdings when triggered
             "status": "active",  # active, executed, cancelled
             "created_at": datetime.utcnow(),
             "executed_at": None
@@ -39,7 +58,7 @@ async def create_trigger_order(user_id: str, ticker: str, trigger_price: float, 
         
         return {
             "success": True,
-            "message": f"Trigger order created: Sell {amount} {ticker} when price hits ${trigger_price:.4f}",
+            "message": f"Trigger order created: Sell all {current_holding:.3f} {ticker} when price hits ${target_price:.4f} ({target_gain_percent:+.1f}% gain)",
             "order": order
         }
         
@@ -78,22 +97,39 @@ async def check_and_execute_triggers(ticker: str, current_price: float) -> list:
     executed_orders = []
     
     try:
-        # Find all active trigger orders for this ticker where price has been hit
+        # Find all active trigger orders for this ticker where price target has been hit
         orders_to_execute = await trigger_orders.find({
             "ticker": ticker,
             "status": "active",
-            "trigger_price": {"$gte": current_price}  # Trigger when price hits or goes below trigger
+            "trigger_price": {"$lte": current_price}  # Trigger when current price hits or goes above trigger
         }).to_list(length=None)
         
         for order in orders_to_execute:
-            # Execute the sell order
+            # Get user's current holdings to determine how much to sell
+            portfolio = await CryptoModels.get_user_portfolio(order["user_id"])
+            holdings = portfolio.get("holdings", {})
+            current_holding = holdings.get(ticker, 0)
+            
+            if current_holding <= 0:
+                # Mark as failed - user no longer has this crypto
+                await trigger_orders.update_one(
+                    {"_id": order["_id"]},
+                    {"$set": {"status": "failed", "failure_reason": "No holdings remaining"}}
+                )
+                continue
+            
+            # Execute the sell order for all current holdings
             result = await PortfolioManager.sell_crypto(
                 order["user_id"], 
                 order["ticker"], 
-                order["amount"]
+                current_holding  # Sell all current holdings
             )
             
             if result["success"]:
+                # Calculate actual gain achieved
+                avg_purchase_price = order.get("avg_purchase_price", current_price)
+                actual_gain_percent = ((current_price - avg_purchase_price) / avg_purchase_price) * 100
+                
                 # Mark order as executed
                 await trigger_orders.update_one(
                     {"_id": order["_id"]},
@@ -102,6 +138,8 @@ async def check_and_execute_triggers(ticker: str, current_price: float) -> list:
                             "status": "executed",
                             "executed_at": datetime.utcnow(),
                             "execution_price": current_price,
+                            "actual_gain_percent": actual_gain_percent,
+                            "amount_sold": current_holding,
                             "execution_details": result["details"]
                         }
                     }
@@ -110,10 +148,12 @@ async def check_and_execute_triggers(ticker: str, current_price: float) -> list:
                 executed_orders.append({
                     "order": order,
                     "result": result,
-                    "execution_price": current_price
+                    "execution_price": current_price,
+                    "actual_gain_percent": actual_gain_percent,
+                    "amount_sold": current_holding
                 })
             else:
-                # Mark order as failed (user might not have enough crypto anymore)
+                # Mark order as failed
                 await trigger_orders.update_one(
                     {"_id": order["_id"]},
                     {"$set": {"status": "failed", "failure_reason": result["message"]}}
