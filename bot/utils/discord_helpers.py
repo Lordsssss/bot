@@ -5,6 +5,8 @@ import discord
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from .constants import ALLOWED_CHANNEL_ID, ADMIN_ROLE_ID
+from bot.db.server_config import is_channel_allowed, get_server_language
+from bot.utils.translations import get_text
 
 
 def create_embed(
@@ -56,12 +58,16 @@ def create_success_embed(message: str) -> discord.Embed:
 
 
 async def check_channel_permission(interaction) -> bool:
-    """Check if command is used in allowed channel"""
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
-        await interaction.response.send_message(
-            "❌ This command can only be used in the designated channel!", 
-            ephemeral=True
-        )
+    """Check if command is used in allowed channel for this server"""
+    guild_id = str(interaction.guild_id) if interaction.guild_id else None
+    if not guild_id:
+        return True  # Allow DMs or handle as needed
+    
+    # Check if channel is allowed for this server
+    if not await is_channel_allowed(guild_id, str(interaction.channel_id)):
+        language = await get_server_language(guild_id)
+        message = get_text(guild_id, "channel_not_allowed", language)
+        await interaction.response.send_message(f"❌ {message}", ephemeral=True)
         return False
     return True
 

@@ -16,6 +16,8 @@ from bot.utils.crypto_helpers import (
     format_money, trigger_irs_investigation
 )
 from bot.db.user import get_user, update_user_points
+from bot.db.server_config import get_server_language
+from bot.utils.translations import get_text
 import random
 
 
@@ -30,18 +32,23 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
         ticker = ticker.upper()
         user_id = str(interaction.user.id)
         
+        guild_id = str(interaction.guild_id) if interaction.guild_id else "0"
+        language = await get_server_language(guild_id)
+        
         # Handle "all" amount
         if amount.lower() == "all":
             user = await get_user(user_id)
             amount_float = float(user.get("points", 0))
             if amount_float < 1.0:
-                await send_error_response(interaction, "You need at least 1 point to buy crypto!")
+                message = get_text(guild_id, "need_minimum_points", language)
+                await send_error_response(interaction, message)
                 return
         else:
             try:
                 amount_float = float(amount)
             except ValueError:
-                await send_error_response(interaction, "Amount must be a number or 'all'!")
+                message = get_text(guild_id, "amount_must_be_number_or_all", language)
+                await send_error_response(interaction, message)
                 return
         
         # Validate inputs
@@ -51,7 +58,9 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
             return
         
         if not validate_ticker(ticker):
-            await send_error_response(interaction, f"Crypto {ticker} not found!\nAvailable: {get_available_tickers_string()}")
+            message = get_text(guild_id, "crypto_not_found", language, 
+                             ticker=ticker, available=get_available_tickers_string())
+            await send_error_response(interaction, message)
             return
         
         # Check for IRS investigation BEFORE purchase
@@ -128,17 +137,17 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str):
                 details["remaining_points"] = updated_user.get("points", 0)
             
             embed = create_embed(
-                title="✅ Purchase Successful!",
+                title=get_text(guild_id, "purchase_successful", language),
                 description=result["message"],
                 color=0x00ff00,
                 fields=[{
-                    "name": "Transaction Details",
+                    "name": get_text(guild_id, "transaction_details", language),
                     "value": (
-                        f"**Coins Received:** {format_crypto_amount(details['coins_received'])} {ticker}\n"
-                        f"**Price per Coin:** {format_money(details['price_per_coin'])}\n"
-                        f"**Total Cost:** {format_money(details['total_cost'])}\n"
-                        f"**Transaction Fee:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
-                        f"**Remaining Points:** {format_money(details['remaining_points'])}"
+                        f"**{get_text(guild_id, 'coins_received', language)}:** {format_crypto_amount(details['coins_received'])} {ticker}\n"
+                        f"**{get_text(guild_id, 'price_per_coin', language)}:** {format_money(details['price_per_coin'])}\n"
+                        f"**{get_text(guild_id, 'total_cost', language)}:** {format_money(details['total_cost'])}\n"
+                        f"**{get_text(guild_id, 'transaction_fee', language)}:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
+                        f"**{get_text(guild_id, 'remaining_points', language)}:** {format_money(details['remaining_points'])}"
                     ),
                     "inline": False
                 }]
@@ -163,6 +172,9 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
         ticker = ticker.upper()
         user_id = str(interaction.user.id)
         
+        guild_id = str(interaction.guild_id) if interaction.guild_id else "0"
+        language = await get_server_language(guild_id)
+        
         # Validate inputs
         is_valid_amount, amount_error = validate_amount(amount)
         if not is_valid_amount:
@@ -170,7 +182,9 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
             return
         
         if not validate_ticker(ticker):
-            await send_error_response(interaction, f"Crypto {ticker} not found!\nAvailable: {get_available_tickers_string()}")
+            message = get_text(guild_id, "crypto_not_found", language, 
+                             ticker=ticker, available=get_available_tickers_string())
+            await send_error_response(interaction, message)
             return
         
         # Check for IRS investigation BEFORE sale
@@ -248,18 +262,18 @@ async def handle_crypto_sell(interaction: Interaction, ticker: str, amount: floa
                 details["new_points"] = updated_user.get("points", 0)
             
             embed = create_embed(
-                title="✅ Sale Successful!",
+                title=get_text(guild_id, "sale_successful", language),
                 description=result["message"],
                 color=0x00ff00,
                 fields=[{
-                    "name": "Transaction Details",
+                    "name": get_text(guild_id, "transaction_details", language),
                     "value": (
-                        f"**Coins Sold:** {details['coins_sold']} {ticker}\n"
-                        f"**Price per Coin:** {format_money(details['price_per_coin'])}\n"
-                        f"**Gross Value:** {format_money(details['gross_value'])}\n"
-                        f"**Transaction Fee:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
-                        f"**Net Received:** {format_money(details['net_value'])}\n"
-                        f"**New Balance:** {format_money(details['new_points'])}"
+                        f"**{get_text(guild_id, 'coins_sold', language)}:** {details['coins_sold']} {ticker}\n"
+                        f"**{get_text(guild_id, 'price_per_coin', language)}:** {format_money(details['price_per_coin'])}\n"
+                        f"**{get_text(guild_id, 'gross_value', language)}:** {format_money(details['gross_value'])}\n"
+                        f"**{get_text(guild_id, 'transaction_fee', language)}:** {format_money(details['fee'])} ({TRANSACTION_FEE*100}%)\n"
+                        f"**{get_text(guild_id, 'net_received', language)}:** {format_money(details['net_value'])}\n"
+                        f"**{get_text(guild_id, 'new_balance', language)}:** {format_money(details['new_points'])}"
                     ),
                     "inline": False
                 }]

@@ -9,7 +9,8 @@ from discord import app_commands
 from bot.utils.constants import ALLOWED_CHANNEL_ID
 from bot.commands import (
     balance, coinflip, slot, roulette, leaderboard, hall_of_fame,
-    next_reset, weekly_limit, my_wins, weekly_reset, force_reset, give, dice
+    next_reset, weekly_limit, my_wins, weekly_reset, force_reset, give, dice,
+    server_config, help
 )
 from bot.commands import crypto
 from bot.crypto.manager import CryptoManager
@@ -50,6 +51,7 @@ def start_bot():
 
 def _register_standard_commands():
     """Register all standard (non-crypto) commands"""
+    client.tree.add_command(help.help_command)
     client.tree.add_command(balance.balance)
     client.tree.add_command(coinflip.coinflip)
     client.tree.add_command(slot.slot)
@@ -62,6 +64,13 @@ def _register_standard_commands():
     client.tree.add_command(force_reset.force_reset)
     client.tree.add_command(give.give)
     client.tree.add_command(dice.dice)
+    
+    # Server configuration commands
+    client.tree.add_command(server_config.config_view)
+    client.tree.add_command(server_config.config_language)
+    client.tree.add_command(server_config.config_channel_add)
+    client.tree.add_command(server_config.config_channel_remove)
+    client.tree.add_command(server_config.config_channel_clear)
 
 
 def _register_crypto_commands():
