@@ -24,13 +24,15 @@ async def get_server_config(guild_id: str) -> dict:
 async def update_server_language(guild_id: str, language: str) -> bool:
     """Update server language setting"""
     try:
-        result = await server_configs.update_one(
+        await server_configs.update_one(
             {"guild_id": guild_id},
             {"$set": {"language": language}},
             upsert=True
         )
-        return result.modified_count > 0 or result.upserted_id is not None
-    except Exception:
+        # If no exception occurred, the operation was successful
+        return True
+    except Exception as e:
+        print(f"Error updating server language: {e}")
         return False
 
 async def add_allowed_channel(guild_id: str, channel_id: str) -> bool:

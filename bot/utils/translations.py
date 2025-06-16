@@ -62,7 +62,7 @@ TRANSLATIONS = {
         "weekly_reset_complete": "Weekly reset complete: points reset, crypto system wiped, winners recorded.",
         
         # Admin commands
-        "language_updated": "Server language updated to {language}!",
+        "language_updated": "Server language updated to {language_name}!",
         "channel_added": "Channel {channel} added to allowed channels!",
         "channel_removed": "Channel {channel} removed from allowed channels!",
         "channels_cleared": "All channel restrictions cleared. Bot can now be used in any channel!",
@@ -133,7 +133,7 @@ TRANSLATIONS = {
         "weekly_reset_complete": "Remise à zéro hebdomadaire terminée : points remis à zéro, système crypto effacé, gagnants enregistrés.",
         
         # Admin commands
-        "language_updated": "Langue du serveur mise à jour vers {language} !",
+        "language_updated": "Langue du serveur mise à jour vers {language_name} !",
         "channel_added": "Canal {channel} ajouté aux canaux autorisés !",
         "channel_removed": "Canal {channel} retiré des canaux autorisés !",
         "channels_cleared": "Toutes les restrictions de canal supprimées. Le bot peut maintenant être utilisé dans n'importe quel canal !",

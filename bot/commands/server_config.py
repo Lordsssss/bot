@@ -87,7 +87,7 @@ async def config_language(interaction: Interaction, language: str):
         success = await update_server_language(guild_id, language)
         if success:
             # Use the NEW language for the success message
-            message = get_text(guild_id, "language_updated", language, language=language.upper())
+            message = get_text(guild_id, "language_updated", language, language_name=language.upper())
             await send_success_response(interaction, message)
         else:
             message = get_text(guild_id, "error_occurred", current_language, error="Failed to update language")
