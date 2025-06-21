@@ -22,11 +22,15 @@ def get_available_tickers_string() -> str:
 
 
 def format_money(amount: float) -> str:
-    """Format money with commas and $ sign"""
-    if amount >= 1000000:
-        return f"${amount:,.2f}"
-    elif amount >= 1000:
-        return f"${amount:,.2f}"
+    """Format money with readable abbreviations (1.5m, 1.5b, etc)"""
+    if abs(amount) >= 1_000_000_000_000:  # Trillions
+        return f"${amount/1_000_000_000_000:.1f}t"
+    elif abs(amount) >= 1_000_000_000:  # Billions
+        return f"${amount/1_000_000_000:.1f}b"
+    elif abs(amount) >= 1_000_000:  # Millions
+        return f"${amount/1_000_000:.1f}m"
+    elif abs(amount) >= 1_000:  # Thousands
+        return f"${amount/1_000:.1f}k"
     else:
         return f"${amount:.2f}"
 

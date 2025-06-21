@@ -152,6 +152,9 @@ class AdvancedCryptoSimulator:
                     update["price"]
                 )
                 
+                # Add executed triggers to the update for notification later
+                update["executed_triggers"] = executed_triggers
+                
                 # Log executed triggers for monitoring
                 if executed_triggers:
                     print(f"🎯 Executed {len(executed_triggers)} trigger orders for {update['ticker']} at ${update['price']:.4f}")

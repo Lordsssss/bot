@@ -1,7 +1,8 @@
 import discord
 from discord import Interaction, app_commands
 from bot.db.user import get_user, update_user_points
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.discord_helpers import check_channel_permission
+from bot.utils.crypto_helpers import format_money
 
 @app_commands.command(name="give", description="Give some of your points to another user")
 @app_commands.describe(
@@ -9,7 +10,7 @@ from bot.utils.constants import ALLOWED_CHANNEL_ID
     amount="Amount of points to give (must be positive)"
 )
 async def give(interaction: Interaction, user: discord.Member, amount: int):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if not await check_channel_permission(interaction):
         return
     
     # Check if amount is valid
@@ -28,7 +29,7 @@ async def give(interaction: Interaction, user: discord.Member, amount: int):
     # Check if giver has enough points
     giver = await get_user(giver_id)
     if giver["points"] < amount:
-        await interaction.response.send_message(f"You only have {giver['points']} points, which is not enough!", ephemeral=True)
+        await interaction.response.send_message(f"You only have {format_money(giver['points'])}, which is not enough!", ephemeral=True)
         return
     
     # Transfer points
@@ -41,7 +42,7 @@ async def give(interaction: Interaction, user: discord.Member, amount: int):
     
     # Send confirmation message
     await interaction.response.send_message(
-        f"{interaction.user.mention} gave {amount} points to {user.mention}!\n"
-        f"{interaction.user.display_name}'s new balance: {updated_giver['points']} points\n"
-        f"{user.display_name}'s new balance: {updated_receiver['points']} points"
+        f"{interaction.user.mention} gave {format_money(amount)} to {user.mention}!\n"
+        f"{interaction.user.display_name}'s new balance: {format_money(updated_giver['points'])}\n"
+        f"{user.display_name}'s new balance: {format_money(updated_receiver['points'])}"
     )

@@ -2,6 +2,7 @@ import discord
 from discord import Interaction,app_commands
 from bot.db.user import get_user, update_user_points
 from bot.utils.discord_helpers import check_channel_permission
+from bot.utils.crypto_helpers import format_money
 from bot.items.models import ItemsManager
 import random
 
@@ -20,7 +21,7 @@ async def coinflip(interaction: Interaction, amount: int):
     
     # Simple balance check
     if user["points"] < amount:
-        await interaction.response.send_message(f"You don't have enough points. Your balance: {user['points']}", ephemeral=True)
+        await interaction.response.send_message(f"You don't have enough points. Your balance: {format_money(user['points'])}", ephemeral=True)
         return
     
     # Check for Lucky Charm (improves odds)
@@ -38,6 +39,6 @@ async def coinflip(interaction: Interaction, amount: int):
 
     # Add lucky charm indicator to message
     luck_indicator = " 🍀" if lucky_charm else ""
-    msg = f"You {'won' if result > 0 else 'lost'} the bet{luck_indicator}! {'+' if result > 0 else ''}{result} points."
+    msg = f"You {'won' if result > 0 else 'lost'} the bet{luck_indicator}! {'+' if result > 0 else ''}{format_money(result)}."
     new_balance = user["points"] + result
-    await interaction.response.send_message(f"{interaction.user.mention} {msg} Your new balance is {new_balance}.")
+    await interaction.response.send_message(f"{interaction.user.mention} {msg} Your new balance is {format_money(new_balance)}.")

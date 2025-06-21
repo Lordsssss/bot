@@ -109,12 +109,18 @@ class CryptoManager:
                 # Use advanced simulator
                 price_updates = await self.advanced_simulator.update_market_prices()
                 
+                # Check for executed trigger orders and send notifications
                 for update in price_updates:
                     ticker = update["ticker"]
                     new_price = update["price"]
                     change_percent = update.get("change_percent", 0)
                     
                     print(f"🧠 {ticker}: ${new_price:.6f} ({change_percent:+.2f}%)")
+                    
+                    # Send notifications for executed trigger orders
+                    executed_triggers = update.get("executed_triggers", [])
+                    if executed_triggers:
+                        await self._send_trigger_notifications(executed_triggers)
                 
                 print(f"🎯 Advanced simulator updated {len(price_updates)} coins")
                 
@@ -289,10 +295,125 @@ class CryptoManager:
                         print(f"💰 Processed {len(payouts)} Auto-Trader Bot payouts")
                         for payout in payouts:
                             print(f"   User {payout['user_id']}: +{payout['amount']:.2f} points")
+                        
+                        # Send Discord notifications
+                        await self._send_payout_notifications(payouts)
                     
             except Exception as e:
                 print(f"❌ Error in passive income loop: {e}")
                 await asyncio.sleep(60 * 60)  # Wait 1 hour before retrying
+    
+    async def _send_payout_notifications(self, payouts: list):
+        """Send Discord notifications for auto-trader payouts"""
+        try:
+            from bot.utils.constants import ALLOWED_CHANNEL_ID
+            from bot.utils.crypto_helpers import format_money
+            import discord
+            
+            channel = self.client.get_channel(ALLOWED_CHANNEL_ID)
+            if not channel:
+                return
+            
+            for payout in payouts:
+                user_id = payout["user_id"]
+                amount = payout["amount"]
+                new_balance = payout["balance_after"]
+                
+                # Get user object for ping
+                try:
+                    user = await self.client.fetch_user(int(user_id))
+                    user_mention = user.mention
+                except:
+                    user_mention = f"<@{user_id}>"
+                
+                embed = discord.Embed(
+                    title="🤖 Auto-Trader Payout!",
+                    description=f"{user_mention} Your auto-trader just earned you {format_money(amount)}!",
+                    color=0x00ff00,
+                    timestamp=datetime.utcnow()
+                )
+                
+                embed.add_field(
+                    name="💰 Earnings Summary",
+                    value=f"**Earned:** {format_money(amount)}\n**New Balance:** {format_money(new_balance)}",
+                    inline=False
+                )
+                
+                embed.set_footer(text="💡 Your auto-trader continues working for you!")
+                
+                await channel.send(embed=embed)
+                print(f"📢 Sent payout notification to user {user_id}")
+                
+        except Exception as e:
+            print(f"❌ Error sending payout notifications: {e}")
+    
+    async def _send_trigger_notifications(self, executed_triggers: list):
+        """Send Discord notifications for executed trigger orders"""
+        try:
+            from bot.utils.constants import ALLOWED_CHANNEL_ID
+            from bot.utils.crypto_helpers import format_money
+            import discord
+            
+            channel = self.client.get_channel(ALLOWED_CHANNEL_ID)
+            if not channel:
+                return
+            
+            for trigger_data in executed_triggers:
+                order = trigger_data["order"]
+                result = trigger_data["result"]
+                execution_price = trigger_data["execution_price"]
+                actual_gain_percent = trigger_data["actual_gain_percent"]
+                amount_sold = trigger_data["amount_sold"]
+                
+                user_id = order["user_id"]
+                ticker = order["ticker"]
+                target_gain = order["target_gain_percent"]
+                
+                # Get user object for ping
+                try:
+                    user = await self.client.fetch_user(int(user_id))
+                    user_mention = user.mention
+                except:
+                    user_mention = f"<@{user_id}>"
+                
+                # Determine if target was met or exceeded
+                gain_status = "🎯 Target Hit!" if actual_gain_percent >= target_gain else "🚀 Exceeded Target!"
+                
+                embed = discord.Embed(
+                    title="🎯 Trigger Order Executed!",
+                    description=f"{user_mention} Your {ticker} trigger order has been executed!",
+                    color=0x00ff00 if actual_gain_percent >= 0 else 0xff9900,
+                    timestamp=datetime.utcnow()
+                )
+                
+                embed.add_field(
+                    name="📊 Execution Details",
+                    value=(
+                        f"**Crypto:** {ticker}\n"
+                        f"**Amount Sold:** {amount_sold:.3f}\n"
+                        f"**Execution Price:** {format_money(execution_price)}\n"
+                        f"**Total Received:** {format_money(result['details']['net_value'])}"
+                    ),
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="📈 Performance",
+                    value=(
+                        f"**Target Gain:** {target_gain:+.1f}%\n"
+                        f"**Actual Gain:** {actual_gain_percent:+.1f}%\n"
+                        f"**Status:** {gain_status.split()[1]}"
+                    ),
+                    inline=True
+                )
+                
+                embed.set_footer(text="💡 Consider setting new trigger orders for future gains!")
+                
+                await channel.send(embed=embed)
+                print(f"📢 Sent trigger notification to user {user_id} for {ticker}")
+                
+        except Exception as e:
+            print(f"❌ Error sending trigger notifications: {e}")
     
     # Public methods for external access
     async def get_market_status(self):

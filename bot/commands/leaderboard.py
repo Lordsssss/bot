@@ -1,12 +1,12 @@
 from discord import Interaction, app_commands
 from bot.db.connection import users
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.discord_helpers import check_channel_permission
+from bot.utils.crypto_helpers import format_money
 import discord
-from discord import Interaction,app_commands
 
 @discord.app_commands.command(name="leaderboard", description="Show the top 10 users by points")
 async def leaderboard(interaction: Interaction):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if not await check_channel_permission(interaction):
         return
 
     top_users = users.find().sort("points", -1).limit(10)
@@ -19,7 +19,7 @@ async def leaderboard(interaction: Interaction):
             name = member.display_name
         except Exception:
             name = f"User ID {user['_id']}"
-        leaderboard_text += f"**#{index}** {name} — {user['points']} points\n"
+        leaderboard_text += f"**#{index}** {name} — {format_money(user['points'])}\n"
         index += 1
 
     await interaction.response.send_message(leaderboard_text)

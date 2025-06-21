@@ -1,12 +1,12 @@
 from discord import Interaction, app_commands
 from bot.db.winners import get_winners_history
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.discord_helpers import check_channel_permission
+from bot.utils.crypto_helpers import format_money
 import discord
-from discord import Interaction,app_commands
 
 @discord.app_commands.command(name="halloffame", description="View the hall of fame with past weekly winners")
 async def hall_of_fame(interaction: Interaction):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if not await check_channel_permission(interaction):
         return
 
     winners = await get_winners_history(limit=10)
@@ -22,7 +22,7 @@ async def hall_of_fame(interaction: Interaction):
     for winner in winners:
         embed.add_field(
             name=f"{winner['date']}",
-            value=f"**{winner['username']}** - {winner['points']} points",
+            value=f"**{winner['username']}** - {format_money(winner['points'])}",
             inline=False,
         )
     await interaction.response.send_message(embed=embed)
