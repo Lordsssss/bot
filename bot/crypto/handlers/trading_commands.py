@@ -19,6 +19,7 @@ from bot.crypto.trigger_orders import create_trigger_order
 from bot.db.user import get_user, update_user_points
 from bot.db.server_config import get_server_language
 from bot.utils.translations import get_text
+from bot.items.models import ItemsManager
 import random
 
 
@@ -64,10 +65,22 @@ async def handle_crypto_buy(interaction: Interaction, ticker: str, amount: str, 
             await send_error_response(interaction, message)
             return
         
-        # Check for IRS investigation BEFORE purchase
+        # Check for Tax Evasion License (prevents IRS investigations)
+        tax_immunity = await ItemsManager.check_effect_active(user_id, "fee_immunity")
+        
+        # Check for Market Insider Tip (better trading outcomes)
+        insider_tip = await ItemsManager.check_effect_active(user_id, "trade_boost")
+        
+        # Check for IRS investigation BEFORE purchase (unless immune)
         irs_investigation = None
-        if random.random() < IRS_INVESTIGATION_CHANCE:
-            irs_investigation = trigger_irs_investigation()
+        if not tax_immunity and random.random() < IRS_INVESTIGATION_CHANCE:
+            # Market Insider Tip reduces IRS investigation chance
+            investigation_chance = IRS_INVESTIGATION_CHANCE
+            if insider_tip:
+                investigation_chance *= 0.5  # 50% less likely to be investigated
+            
+            if random.random() < investigation_chance:
+                irs_investigation = trigger_irs_investigation()
         
         # Execute purchase
         result = await PortfolioManager.buy_crypto(user_id, ticker, amount_float)
@@ -321,10 +334,64 @@ async def handle_crypto_sell_all(interaction: Interaction):
         await interaction.response.defer()
         
         user_id = str(interaction.user.id)
+        
+        # Check for Tax Evasion License (prevents IRS investigations)
+        tax_immunity = await ItemsManager.check_effect_active(user_id, "fee_immunity")
+        
+        # Check for IRS investigation BEFORE sale (unless immune)
+        irs_investigation = None
+        if not tax_immunity and random.random() < IRS_INVESTIGATION_CHANCE:
+            irs_investigation = trigger_irs_investigation()
+        
         result = await PortfolioManager.sell_all_crypto(user_id)
         
         if result["success"]:
             details = result["details"]
+            
+            # If IRS investigation triggered, apply penalty AFTER successful sale
+            if irs_investigation:
+                penalty_percent = irs_investigation["penalty_percent"]
+                
+                # Get current user state after sale
+                user = await get_user(user_id)
+                current_points = user.get("points", 0)
+                
+                # Get portfolio to calculate crypto value (should be mostly empty after sell all)
+                from bot.crypto.models import CryptoModels
+                portfolio = await CryptoModels.get_user_portfolio(user_id)
+                total_crypto_value = 0
+                
+                holdings = portfolio.get("holdings", {})
+                for hold_ticker, hold_amount in holdings.items():
+                    coin = await CryptoModels.get_coin(hold_ticker)
+                    if coin:
+                        total_crypto_value += hold_amount * coin["current_price"]
+                
+                # Calculate penalties
+                points_penalty = current_points * penalty_percent
+                
+                # Apply points penalty
+                await update_user_points(user_id, -points_penalty)
+                
+                # Send IRS investigation embed
+                irs_embed = create_embed(
+                    title="🚨 IRS INVESTIGATION!",
+                    description=irs_investigation["message"],
+                    color=0xff0000,
+                    fields=[{
+                        "name": "💸 Assets Seized",
+                        "value": (
+                            f"**Points Lost:** {format_money(points_penalty)}\n"
+                            f"**Total Value Lost:** ~{format_money(points_penalty)}"
+                        ),
+                        "inline": False
+                    }]
+                )
+                await interaction.followup.send(embed=irs_embed)
+                
+                # Update new points in details
+                updated_user = await get_user(user_id)
+                details["new_points"] = updated_user.get("points", 0)
             
             fields = [{
                 "name": "💰 Sale Summary",

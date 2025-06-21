@@ -1,7 +1,8 @@
 import discord
 from discord import Interaction,app_commands
 from bot.db.user import get_user, update_user_points
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.discord_helpers import check_channel_permission
+from bot.items.models import ItemsManager
 import random
 
 # Roulette wheel numbers with their colors
@@ -31,7 +32,7 @@ BLACK_NUMBERS = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33,
     app_commands.Choice(name="Even (1:1 payout)", value="even"),
 ])
 async def roulette(interaction: Interaction, amount: int, bet_type: str, number: int = None):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if not await check_channel_permission(interaction):
         return
 
     # Validate bet amount
@@ -55,6 +56,9 @@ async def roulette(interaction: Interaction, amount: int, bet_type: str, number:
     if user["points"] < amount:
         await interaction.response.send_message(f"You don't have enough points. Your balance: {user['points']}", ephemeral=True)
         return
+    
+    # Check for Lucky Charm (improves odds)
+    lucky_charm = await ItemsManager.check_effect_active(user_id, "casino_boost")
     
     # Spin the wheel
     winning_number = random.randint(0, 36)
@@ -85,12 +89,19 @@ async def roulette(interaction: Interaction, amount: int, bet_type: str, number:
             won = True
             payout_multiplier = 1  # 1:1 payout for odd/even bets
 
-    # Calculate result
-    if won:
-        winnings = amount * payout_multiplier
-        result = winnings  # Player gets their bet back plus winnings
+    # Apply Lucky Charm bonus (15% better odds means second chance on losses)
+    if not won and lucky_charm and random.random() < 0.15:
+        # Lucky charm gives a 15% chance to turn a loss into a push (no loss)
+        result = 0  # Push - player doesn't lose their bet
+        luck_saved = True
     else:
-        result = -amount  # Player loses their bet
+        luck_saved = False
+        # Calculate result
+        if won:
+            winnings = amount * payout_multiplier
+            result = winnings  # Player gets their bet back plus winnings
+        else:
+            result = -amount  # Player loses their bet
 
     # Update user points
     await update_user_points(user_id, result)
@@ -104,14 +115,19 @@ async def roulette(interaction: Interaction, amount: int, bet_type: str, number:
     else:
         bet_description = bet_type
     
+    # Add lucky charm indicator
+    luck_indicator = " 🍀" if lucky_charm else ""
+    
     if won:
         if bet_type == "number":
             msg = f"🎉 **JACKPOT!** The ball landed on {winning_number} {color_emoji}!\nYou bet on {bet_description} and won **{winnings} points** (35:1 payout)!"
         else:
             msg = f"🎉 **Winner!** The ball landed on {winning_number} {color_emoji}!\nYou bet on {bet_description} and won **{winnings} points**!"
+    elif luck_saved:
+        msg = f"🍀 **Lucky Save!** The ball landed on {winning_number} {color_emoji}.\nYour Lucky Charm saved you from losing {amount} points!"
     else:
         msg = f"💸 The ball landed on {winning_number} {color_emoji}.\nYou bet on {bet_description} and lost **{amount} points**."
 
-    final_msg = f"{interaction.user.mention}\n{msg}\nYour new balance is **{new_balance} points**."
+    final_msg = f"{interaction.user.mention}{luck_indicator}\n{msg}\nYour new balance is **{new_balance} points**."
     
     await interaction.response.send_message(final_msg)

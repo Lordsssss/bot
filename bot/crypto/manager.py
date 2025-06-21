@@ -54,6 +54,7 @@ class CryptoManager:
         # Start background tasks
         asyncio.create_task(self._price_update_loop())
         asyncio.create_task(self._daily_volatility_update_loop())
+        asyncio.create_task(self._passive_income_loop())
         
         print("✅ Crypto Trading System is now running!")
         
@@ -272,6 +273,25 @@ class CryptoManager:
                     
             except Exception as e:
                 print(f"❌ Error in daily volatility update: {e}")
+                await asyncio.sleep(60 * 60)  # Wait 1 hour before retrying
+    
+    async def _passive_income_loop(self):
+        """Process Auto-Trader Bot passive income every 6 hours"""
+        while self.is_running:
+            try:
+                await asyncio.sleep(6 * 60 * 60)  # 6 hours
+                
+                if self.is_running:
+                    from bot.items.models import ItemsManager
+                    payouts = await ItemsManager.process_passive_income()
+                    
+                    if payouts:
+                        print(f"💰 Processed {len(payouts)} Auto-Trader Bot payouts")
+                        for payout in payouts:
+                            print(f"   User {payout['user_id']}: +{payout['amount']:.2f} points")
+                    
+            except Exception as e:
+                print(f"❌ Error in passive income loop: {e}")
                 await asyncio.sleep(60 * 60)  # Wait 1 hour before retrying
     
     # Public methods for external access

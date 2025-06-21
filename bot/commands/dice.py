@@ -3,7 +3,8 @@ from discord import Interaction, app_commands
 import random
 import asyncio
 from bot.db.user import get_user, update_user_points
-from bot.utils.constants import ALLOWED_CHANNEL_ID
+from bot.utils.discord_helpers import check_channel_permission
+from bot.items.models import ItemsManager
 from enum import Enum
 
 # Add dice face Unicode characters
@@ -62,7 +63,7 @@ async def dice(
     target: int = None, 
     oddeven: str = None
 ):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if not await check_channel_permission(interaction):
         return
     
     # Validate bet amount
@@ -78,6 +79,9 @@ async def dice(
     if user["points"] < amount:
         await interaction.response.send_message(f"You don't have enough points. Your balance: {user['points']}", ephemeral=True)
         return
+    
+    # Check for Lucky Charm (improves odds)
+    lucky_charm = await ItemsManager.check_effect_active(user_id, "casino_boost")
     
     # Defer the response to allow for animation
     await interaction.response.defer()
@@ -176,22 +180,35 @@ async def dice(
             payout_multiplier = 0
             result_msg = f"No triple. Better luck next time!"
     
-    # Calculate winnings
-    winnings = int(amount * payout_multiplier) if win else -amount
+    # Apply Lucky Charm bonus (15% better odds means second chance on losses)
+    luck_saved = False
+    if not win and lucky_charm and random.random() < 0.15:
+        # Lucky charm gives a 15% chance to turn a loss into a push (no loss)
+        winnings = 0  # Push - player doesn't lose their bet
+        luck_saved = True
+        result_msg += " 🍀 **Lucky Save!** Your Lucky Charm protected your bet!"
+    else:
+        # Calculate winnings normally
+        winnings = int(amount * payout_multiplier) if win else -amount
+    
     new_balance = user["points"] + winnings
     
     # Update user points
     await update_user_points(user_id, winnings)
     
     # Create embed response
+    luck_indicator = " 🍀" if lucky_charm else ""
+    status = "WIN!" if win else "PUSH!" if luck_saved else "LOSS!"
+    color = 0x00FF00 if win else 0xFFFF00 if luck_saved else 0xFF0000
+    
     embed = discord.Embed(
-        title="🎲 Dice Game 🎲",
+        title=f"🎲 Dice Game{luck_indicator} 🎲",
         description=f"**Mode: {game_mode.name}**\n\n"
                     f"**Dice: {dice_emojis}**\n"
                     f"**Sum: {dice_str} = {dice_sum}**\n\n"
                     f"{result_msg}\n\n"
-                    f"**{'WIN!' if win else 'LOSS!'}** {'+' if winnings > 0 else ''}{winnings} points",
-        color=0x00FF00 if win else 0xFF0000
+                    f"**{status}** {'+' if winnings > 0 else ''}{winnings} points",
+        color=color
     )
     embed.set_footer(text=f"New balance: {new_balance} points | Bet: {amount} points")
     

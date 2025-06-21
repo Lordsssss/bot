@@ -10,7 +10,7 @@ from bot.utils.constants import ALLOWED_CHANNEL_ID
 from bot.commands import (
     balance, coinflip, slot, roulette, leaderboard, hall_of_fame,
     next_reset, weekly_limit, my_wins, weekly_reset, force_reset, give, dice,
-    server_config, help
+    server_config, help, item_shop
 )
 from bot.commands import crypto
 from bot.crypto.manager import CryptoManager
@@ -64,6 +64,12 @@ def _register_standard_commands():
     client.tree.add_command(force_reset.force_reset)
     client.tree.add_command(give.give)
     client.tree.add_command(dice.dice)
+    
+    # Item shop commands
+    client.tree.add_command(item_shop.shop)
+    client.tree.add_command(item_shop.buy_item)
+    client.tree.add_command(item_shop.inventory)
+    client.tree.add_command(item_shop.use_item)
     
     # Server configuration commands
     client.tree.add_command(server_config.config_view)

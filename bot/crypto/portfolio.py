@@ -5,6 +5,7 @@ from datetime import datetime
 from .models import CryptoModels
 from .constants import TRANSACTION_FEE
 from bot.db.user import get_user, update_user_points
+from bot.items.models import ItemsManager
 
 
 class PortfolioManager:
@@ -27,11 +28,17 @@ class PortfolioManager:
             if not coin:
                 return {"success": False, "message": f"Crypto {ticker} not found!"}
             
+            # Check for fee immunity (Tax Evasion License)
+            tax_immunity = await ItemsManager.check_effect_active(user_id, "fee_immunity")
+            
             # Calculate transaction
             current_price = coin["current_price"]
-            fee = amount_to_spend * TRANSACTION_FEE
+            fee = 0 if tax_immunity else (amount_to_spend * TRANSACTION_FEE)
             amount_after_fee = amount_to_spend - fee
             coins_received = round(amount_after_fee / current_price, 3)
+            
+            # Consume Market Insider Tip usage
+            await ItemsManager.consume_effect_use(user_id, "trade_boost")
             
             # Execute transaction
             await update_user_points(user_id, -amount_to_spend)
@@ -87,10 +94,13 @@ class PortfolioManager:
             if not coin:
                 return {"success": False, "message": f"Crypto {ticker} not found!"}
             
+            # Check for fee immunity (Tax Evasion License)
+            tax_immunity = await ItemsManager.check_effect_active(user_id, "fee_immunity")
+            
             # Calculate transaction
             current_price = coin["current_price"]
             gross_sale_value = amount_to_sell * current_price
-            fee = gross_sale_value * TRANSACTION_FEE
+            fee = 0 if tax_immunity else (gross_sale_value * TRANSACTION_FEE)
             net_sale_value = gross_sale_value - fee
             
             # Execute transaction
@@ -143,6 +153,9 @@ class PortfolioManager:
             if not holdings or all(amount <= 0 for amount in holdings.values()):
                 return {"success": False, "message": "No crypto holdings to sell!"}
             
+            # Check for fee immunity (Tax Evasion License)
+            tax_immunity = await ItemsManager.check_effect_active(user_id, "fee_immunity")
+            
             total_sale_value = 0
             total_fee = 0
             sold_coins = []
@@ -156,7 +169,7 @@ class PortfolioManager:
                     
                     current_price = coin["current_price"]
                     gross_sale_value = amount * current_price
-                    fee = gross_sale_value * TRANSACTION_FEE
+                    fee = 0 if tax_immunity else (gross_sale_value * TRANSACTION_FEE)
                     net_sale_value = gross_sale_value - fee
                     
                     total_sale_value += net_sale_value

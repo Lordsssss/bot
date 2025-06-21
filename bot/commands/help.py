@@ -46,6 +46,27 @@ async def help_command(interaction: Interaction):
 `/give <@utilisateur> <montant>` - Donner des points
 """
             
+            # Items Commands
+            items_commands = """
+**🛒 Boutique d'Objets**
+`/shop` - Voir la boutique d'objets
+`/buy <nom_objet>` - Acheter un objet
+`/inventory` - Voir votre inventaire
+`/use <nom_objet>` - Utiliser un objet
+
+**🧰 Objets Fonctionnels**
+• **🔍 Conseil d'Initié** - Améliore les résultats de trading (3 trades)
+• **👷 Immigré Sous-Payé** - Revenus passifs (0.3% toutes les 6h pendant 24h)
+• **🤓 Stagiaire Goldman Drogué** - Revenus passifs (0.6% toutes les 6h pendant 24h)
+• **🎭 Influenceur Crypto** - Revenus passifs (1.0% toutes les 6h pendant 24h)
+• **👨‍💼 Sam Bankman-Fried** - Revenus passifs (1.5% toutes les 6h pendant 24h)
+• **🍀 Porte-Bonheur** - Améliore les chances au casino (24h)
+• **🚫 Licence d'Évasion Fiscale** - Supprime les frais et enquêtes IRS (24h)
+
+*Prix des auto-traders s'adaptent à votre valeur nette!*
+*Tous les objets ont un délai de récupération de 24h après achat.*
+"""
+            
             # Crypto Commands
             crypto_commands = """
 **📈 Trading Crypto**
@@ -114,6 +135,27 @@ async def help_command(interaction: Interaction):
 `/slot <amount>` - Slot machine
 `/roulette <amount> <color>` - Roulette (red/black)
 `/give <@user> <amount>` - Give points to user
+"""
+            
+            # Items Commands
+            items_commands = """
+**🛒 Item Shop**
+`/shop` - Browse the item shop
+`/buy <item_name>` - Purchase an item
+`/inventory` - View your inventory
+`/use <item_name>` - Use an item
+
+**🧰 Functional Items**
+• **🔍 Market Insider Tip** - Better trading outcomes (3 trades)
+• **👷 Underpaid Immigrant** - Passive income (0.3% every 6h for 24h)
+• **🤓 Coked Up Goldman Intern** - Passive income (0.6% every 6h for 24h)
+• **🎭 Crypto Influencer** - Passive income (1.0% every 6h for 24h)
+• **👨‍💼 Sam Bankman-Fried** - Passive income (1.5% every 6h for 24h)
+• **🍀 Lucky Charm** - Improved casino odds (24h duration)
+• **🚫 Tax Evasion License** - No fees & IRS immunity (24h)
+
+*Auto-trader prices scale with your networth!*
+*All items have a 24-hour cooldown after purchase.*
 """
             
             # Crypto Commands
@@ -189,6 +231,15 @@ async def help_command(interaction: Interaction):
         )
         embeds.append(casino_embed)
         
+        # Items embed
+        items_embed = create_embed(
+            title=f"{title} - Items",
+            description=items_commands,
+            color=0x9b59b6,
+            footer=footer
+        )
+        embeds.append(items_embed)
+        
         # Crypto embed
         crypto_embed = create_embed(
             title=f"{title} - Crypto",
@@ -202,7 +253,7 @@ async def help_command(interaction: Interaction):
         admin_embed = create_embed(
             title=f"{title} - Admin & Features",
             description=admin_commands + "\n" + features,
-            color=0x9b59b6,
+            color=0x2c3e50,
             footer=footer
         )
         embeds.append(admin_embed)
