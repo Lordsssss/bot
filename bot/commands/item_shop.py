@@ -87,10 +87,46 @@ async def buy_item(interaction: Interaction, item: str):
         
         user_id = str(interaction.user.id)
         
-        # Find item by name (case insensitive)
+        # Find item by name (case insensitive, flexible matching)
         item_id = None
+        item_lower = item.lower().strip()
+        
         for id, item_data in ITEMS.items():
-            if item_data["name"].lower() == item.lower():
+            item_name = item_data["name"].lower()
+            
+            # Exact match with display name
+            if item_name == item_lower:
+                item_id = id
+                break
+            
+            # Match without emoji (remove emojis and extra spaces)
+            import re
+            clean_name = re.sub(r'[^\w\s-]', '', item_name).strip()
+            clean_name = re.sub(r'\s+', ' ', clean_name)  # Normalize spaces
+            
+            if clean_name == item_lower:
+                item_id = id
+                break
+            
+            # Partial match for convenience (if input is unique enough)
+            if item_lower in clean_name and len(item_lower) >= 3:
+                item_id = id
+                break
+            
+            # Special aliases/abbreviations
+            aliases = {
+                'sbf': 'sam_bankman_fried',
+                'sam': 'sam_bankman_fried',
+                'goldman': 'goldman_intern',
+                'intern': 'goldman_intern',
+                'influencer': 'crypto_influencer',
+                'immigrant': 'underpaid_immigrant',
+                'charm': 'lucky_charm',
+                'tax': 'tax_evasion_license',
+                'insider': 'market_insider_tip'
+            }
+            
+            if item_lower in aliases and aliases[item_lower] == id:
                 item_id = id
                 break
         
@@ -227,10 +263,46 @@ async def use_item(interaction: Interaction, item: str):
         
         user_id = str(interaction.user.id)
         
-        # Find item by name (case insensitive)
+        # Find item by name (case insensitive, flexible matching)
         item_id = None
+        item_lower = item.lower().strip()
+        
         for id, item_data in ITEMS.items():
-            if item_data["name"].lower() == item.lower():
+            item_name = item_data["name"].lower()
+            
+            # Exact match with display name
+            if item_name == item_lower:
+                item_id = id
+                break
+            
+            # Match without emoji (remove emojis and extra spaces)
+            import re
+            clean_name = re.sub(r'[^\w\s-]', '', item_name).strip()
+            clean_name = re.sub(r'\s+', ' ', clean_name)  # Normalize spaces
+            
+            if clean_name == item_lower:
+                item_id = id
+                break
+            
+            # Partial match for convenience (if input is unique enough)
+            if item_lower in clean_name and len(item_lower) >= 3:
+                item_id = id
+                break
+            
+            # Special aliases/abbreviations
+            aliases = {
+                'sbf': 'sam_bankman_fried',
+                'sam': 'sam_bankman_fried',
+                'goldman': 'goldman_intern',
+                'intern': 'goldman_intern',
+                'influencer': 'crypto_influencer',
+                'immigrant': 'underpaid_immigrant',
+                'charm': 'lucky_charm',
+                'tax': 'tax_evasion_license',
+                'insider': 'market_insider_tip'
+            }
+            
+            if item_lower in aliases and aliases[item_lower] == id:
                 item_id = id
                 break
         
