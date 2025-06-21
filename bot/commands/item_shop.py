@@ -217,7 +217,14 @@ async def inventory(interaction: Interaction):
                 
                 # Calculate remaining time/uses
                 if effect.get("expires_at"):
-                    remaining = effect["expires_at"] - datetime.now(timezone.utc)
+                    expires_at = effect["expires_at"]
+                    now = datetime.now(timezone.utc)
+                    
+                    # Handle timezone-naive datetimes from old records
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    
+                    remaining = expires_at - now
                     hours = remaining.total_seconds() / 3600
                     if hours > 0:
                         effects_text += f"**{item_name}** - {hours:.1f}h remaining\n"

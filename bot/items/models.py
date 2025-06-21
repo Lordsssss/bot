@@ -62,7 +62,13 @@ class ItemsManager:
             }, sort=[("purchased_at", -1)])
             
             if recent_purchase:
-                time_since_purchase = now - recent_purchase["purchased_at"]
+                purchased_at = recent_purchase["purchased_at"]
+                
+                # Handle timezone-naive datetimes from old records
+                if purchased_at.tzinfo is None:
+                    purchased_at = purchased_at.replace(tzinfo=timezone.utc)
+                
+                time_since_purchase = now - purchased_at
                 remaining_hours = cooldown_hours - (time_since_purchase.total_seconds() / 3600)
                 
                 if remaining_hours > 0:
@@ -287,7 +293,13 @@ class ItemsManager:
                 item_def = ITEMS.get(item_id)
                 
                 if item_def:
-                    time_since_purchase = now - purchase["purchased_at"]
+                    purchased_at = purchase["purchased_at"]
+                    
+                    # Handle timezone-naive datetimes from old records
+                    if purchased_at.tzinfo is None:
+                        purchased_at = purchased_at.replace(tzinfo=timezone.utc)
+                    
+                    time_since_purchase = now - purchased_at
                     remaining_hours = cooldown_hours - (time_since_purchase.total_seconds() / 3600)
                     
                     if remaining_hours > 0:
@@ -308,14 +320,16 @@ class ItemsManager:
         """Get user's currently active effects"""
         try:
             now = datetime.now(timezone.utc)
+            now_naive = now.replace(tzinfo=None)  # For comparison with old records
             
-            # Clean up expired effects first
+            # Clean up expired effects - handle both timezone-aware and naive
             await active_effects.update_many(
                 {
                     "user_id": user_id,
                     "active": True,
                     "$or": [
                         {"expires_at": {"$lte": now}},
+                        {"expires_at": {"$lte": now_naive}},
                         {"uses_remaining": {"$lte": 0}}
                     ]
                 },
@@ -377,12 +391,16 @@ class ItemsManager:
         """Process all auto-trader bot payouts"""
         try:
             now = datetime.now(timezone.utc)
+            now_naive = now.replace(tzinfo=None)  # For comparison with old records
             
-            # Find all active auto-trader bots ready for payout
+            # Find all active auto-trader bots ready for payout - handle both timezone formats
             ready_bots = await active_effects.find({
                 "effect_type": "passive_income",
                 "active": True,
-                "next_payout": {"$lte": now}
+                "$or": [
+                    {"next_payout": {"$lte": now}},
+                    {"next_payout": {"$lte": now_naive}}
+                ]
             }).to_list(length=None)
             
             payouts = []
@@ -454,3 +472,54 @@ class ItemsManager:
                 shop[category]["items"].append(item_copy)
         
         return shop
+    
+    @staticmethod
+    async def migrate_timezone_records():
+        """Migrate timezone-naive datetime records to timezone-aware (one-time utility)"""
+        try:
+            print("🔄 Migrating timezone-naive datetime records...")
+            
+            # Update active_effects collection
+            effects_updated = await active_effects.update_many(
+                {"activated_at": {"$type": "date"}},  # Find datetime fields
+                [{"$set": {
+                    "activated_at": {"$dateFromString": {"dateString": {"$dateToString": {"date": "$activated_at", "timezone": "UTC"}}}},
+                    "expires_at": {"$cond": {
+                        "if": {"$ne": ["$expires_at", None]},
+                        "then": {"$dateFromString": {"dateString": {"$dateToString": {"date": "$expires_at", "timezone": "UTC"}}}},
+                        "else": None
+                    }},
+                    "next_payout": {"$cond": {
+                        "if": {"$ne": ["$next_payout", None]},
+                        "then": {"$dateFromString": {"dateString": {"$dateToString": {"date": "$next_payout", "timezone": "UTC"}}}},
+                        "else": None
+                    }}
+                }}]
+            )
+            
+            # Update item_purchases collection
+            purchases_updated = await item_purchases.update_many(
+                {"purchased_at": {"$type": "date"}},
+                [{"$set": {
+                    "purchased_at": {"$dateFromString": {"dateString": {"$dateToString": {"date": "$purchased_at", "timezone": "UTC"}}}}
+                }}]
+            )
+            
+            # Update user_inventories collection
+            inventories_updated = await user_inventories.update_many(
+                {"created_at": {"$type": "date"}},
+                [{"$set": {
+                    "created_at": {"$dateFromString": {"dateString": {"$dateToString": {"date": "$created_at", "timezone": "UTC"}}}}
+                }}]
+            )
+            
+            print(f"✅ Migration complete!")
+            print(f"   Effects updated: {effects_updated.modified_count}")
+            print(f"   Purchases updated: {purchases_updated.modified_count}")
+            print(f"   Inventories updated: {inventories_updated.modified_count}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Migration error: {e}")
+            return False
