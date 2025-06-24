@@ -120,8 +120,8 @@ class PortfolioDashboard(BaseCryptoDashboard):
     
     async def _get_portfolio_embed(self) -> discord.Embed:
         """Generate portfolio embed"""
-        portfolio = get_crypto_portfolio(self.authorized_user_id)
-        prices = get_crypto_prices()
+        portfolio = await get_crypto_portfolio(self.authorized_user_id)
+        prices = await get_crypto_prices()
         
         embed = discord.Embed(
             title="🏦 Crypto Portfolio Dashboard",
@@ -169,7 +169,7 @@ class PortfolioDashboard(BaseCryptoDashboard):
             embed.add_field(name="📈 Current Holdings", value=holdings_text, inline=False)
         
         # Recent transactions
-        transactions = get_crypto_transactions(self.authorized_user_id, limit=3)
+        transactions = await get_crypto_transactions(self.authorized_user_id, limit=3)
         if transactions:
             tx_text = ""
             for tx in transactions:
@@ -235,7 +235,7 @@ class MarketDashboard(BaseCryptoDashboard):
     
     async def _get_market_embed(self) -> discord.Embed:
         """Generate market information embed"""
-        prices = get_crypto_prices()
+        prices = await get_crypto_prices()
         
         embed = discord.Embed(
             title="📊 Crypto Market Dashboard",
@@ -280,7 +280,7 @@ class TradingDashboard(BaseCryptoDashboard):
     
     @discord.ui.button(label="📝 Transaction History", style=discord.ButtonStyle.green)
     async def show_history(self, interaction: discord.Interaction, button: discord.ui.Button):
-        transactions = get_crypto_transactions(self.authorized_user_id, limit=10)
+        transactions = await get_crypto_transactions(self.authorized_user_id, limit=10)
         
         embed = discord.Embed(
             title="📝 Transaction History",
@@ -318,7 +318,7 @@ class TradingDashboard(BaseCryptoDashboard):
     
     async def _get_trading_embed(self) -> discord.Embed:
         """Generate trading dashboard embed"""
-        trigger_orders = get_crypto_trigger_orders(self.authorized_user_id)
+        trigger_orders = await get_crypto_trigger_orders(self.authorized_user_id)
         
         embed = discord.Embed(
             title="⚡ Advanced Trading Dashboard",

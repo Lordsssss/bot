@@ -400,95 +400,59 @@ class CryptoModels:
 
 
 # Wrapper functions for dashboard compatibility
-def get_crypto_portfolio(user_id: str):
-    """Synchronous wrapper for getting user portfolio - returns simplified format"""
-    import asyncio
+async def get_crypto_portfolio(user_id: str):
+    """Async wrapper for getting user portfolio - returns simplified format"""
+    portfolio = await CryptoModels.get_user_portfolio(user_id)
+    if not portfolio:
+        return {}
     
-    async def _get_portfolio():
-        portfolio = await CryptoModels.get_user_portfolio(user_id)
-        if not portfolio:
-            return {}
-        
-        # Convert to simplified format: {ticker: {amount: float, cost_basis: float}}
-        simplified = {}
-        holdings = portfolio.get("holdings", {})
-        cost_basis = portfolio.get("cost_basis", {})
-        
-        for ticker, amount in holdings.items():
-            if amount > 0:
-                simplified[ticker] = {
-                    "amount": amount,
-                    "cost_basis": cost_basis.get(ticker, 0)
-                }
-        
-        return simplified
+    # Convert to simplified format: {ticker: {amount: float, cost_basis: float}}
+    simplified = {}
+    holdings = portfolio.get("holdings", {})
+    cost_basis = portfolio.get("cost_basis", {})
     
-    try:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_get_portfolio())
-    except RuntimeError:
-        # If no event loop is running, create a new one
-        return asyncio.run(_get_portfolio())
+    for ticker, amount in holdings.items():
+        if amount > 0:
+            simplified[ticker] = {
+                "amount": amount,
+                "cost_basis": cost_basis.get(ticker, 0)
+            }
+    
+    return simplified
 
 
-def get_crypto_prices():
-    """Synchronous wrapper for getting current crypto prices"""
-    import asyncio
-    
-    async def _get_prices():
-        coins = await CryptoModels.get_all_coins()
-        prices = {}
-        for coin in coins:
-            prices[coin["ticker"]] = coin.get("current_price", 0.0)
-        return prices
-    
-    try:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_get_prices())
-    except RuntimeError:
-        return asyncio.run(_get_prices())
+async def get_crypto_prices():
+    """Async wrapper for getting current crypto prices"""
+    coins = await CryptoModels.get_all_coins()
+    prices = {}
+    for coin in coins:
+        prices[coin["ticker"]] = coin.get("current_price", 0.0)
+    return prices
 
 
-def get_crypto_transactions(user_id: str, limit: int = 10):
-    """Synchronous wrapper for getting user transactions"""
-    import asyncio
-    
-    async def _get_transactions():
-        transactions = await CryptoModels.get_user_transactions(user_id, limit)
-        # Convert to simplified format
-        simplified = []
-        for tx in transactions:
-            simplified.append({
-                "ticker": tx["ticker"],
-                "action": tx["type"],  # "buy" or "sell"
-                "amount": tx["amount"],
-                "price": tx["price"],
-                "timestamp": tx["timestamp"].strftime("%Y-%m-%d %H:%M")
-            })
-        return simplified
-    
-    try:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_get_transactions())
-    except RuntimeError:
-        return asyncio.run(_get_transactions())
+async def get_crypto_transactions(user_id: str, limit: int = 10):
+    """Async wrapper for getting user transactions"""
+    transactions = await CryptoModels.get_user_transactions(user_id, limit)
+    # Convert to simplified format
+    simplified = []
+    for tx in transactions:
+        simplified.append({
+            "ticker": tx["ticker"],
+            "action": tx["type"],  # "buy" or "sell"
+            "amount": tx["amount"],
+            "price": tx["price"],
+            "timestamp": tx["timestamp"].strftime("%Y-%m-%d %H:%M")
+        })
+    return simplified
 
 
-def get_crypto_trigger_orders(user_id: str):
-    """Synchronous wrapper for getting user trigger orders"""
-    import asyncio
+async def get_crypto_trigger_orders(user_id: str):
+    """Async wrapper for getting user trigger orders"""
     from bot.crypto.trigger_orders import get_user_trigger_orders
     
-    async def _get_trigger_orders():
-        try:
-            orders = await get_user_trigger_orders(user_id, "active")
-            return orders
-        except Exception as e:
-            print(f"Error getting trigger orders: {e}")
-            return []
-    
     try:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_get_trigger_orders())
-    except RuntimeError:
-        return asyncio.run(_get_trigger_orders())
+        orders = await get_user_trigger_orders(user_id, "active")
+        return orders
+    except Exception as e:
+        print(f"Error getting trigger orders: {e}")
+        return []

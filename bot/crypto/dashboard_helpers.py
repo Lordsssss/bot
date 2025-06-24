@@ -76,7 +76,7 @@ async def execute_sell_crypto(ctx, ticker: str, amount: str) -> Dict[str, Any]:
         user_id = str(ctx.user.id)
         
         # Get user's portfolio
-        portfolio = get_crypto_portfolio(user_id)
+        portfolio = await get_crypto_portfolio(user_id)
         
         if not portfolio or ticker not in portfolio:
             return {
@@ -157,8 +157,8 @@ async def calculate_portfolio_value(portfolio: Dict, prices: Dict) -> tuple:
 
 async def get_portfolio_pl(user_id: str) -> Dict[str, float]:
     """Get portfolio profit/loss information"""
-    portfolio = get_crypto_portfolio(user_id)
-    prices = get_crypto_prices()
+    portfolio = await get_crypto_portfolio(user_id)
+    prices = await get_crypto_prices()
     
     if not portfolio or not prices:
         return {"all_time_pl": 0, "current_pl": 0}
