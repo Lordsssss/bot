@@ -129,24 +129,11 @@ class PortfolioDashboard(BaseCryptoDashboard):
             timestamp=datetime.utcnow()
         )
         
-        # Debug information
-        print(f"DEBUG - Portfolio data for user {self.authorized_user_id}: {portfolio}")
-        print(f"DEBUG - Portfolio type: {type(portfolio)}")
-        print(f"DEBUG - Portfolio keys: {list(portfolio.keys()) if portfolio else 'None'}")
-        print(f"DEBUG - Prices data: {prices}")
-        print(f"DEBUG - Number of prices: {len(prices) if prices else 0}")
-        
-        # Check if portfolio has any data at all
-        if not portfolio or len(portfolio) == 0:
+        if not portfolio:
             embed.description = "📈 Your portfolio is empty. Start trading to see your holdings here!"
             embed.add_field(
                 name="💡 Quick Start",
                 value="1. Select a coin from the dropdown\n2. Use **Buy All Balance** to invest\n3. Watch your portfolio grow!",
-                inline=False
-            )
-            embed.add_field(
-                name="🔍 Debug Info",
-                value=f"Portfolio: {portfolio}\nUser ID: {self.authorized_user_id}",
                 inline=False
             )
             return embed
@@ -164,10 +151,7 @@ class PortfolioDashboard(BaseCryptoDashboard):
         
         # Holdings
         holdings_text = ""
-        print(f"DEBUG - Processing {len(portfolio)} portfolio items")
-        
         for ticker, data in portfolio.items():
-            print(f"DEBUG - Processing {ticker}: {data}")
             if data['amount'] > 0:
                 current_price = prices.get(ticker, 0)
                 value = data['amount'] * current_price
@@ -180,20 +164,9 @@ class PortfolioDashboard(BaseCryptoDashboard):
                 holdings_text += f"├ Amount: {data['amount']:,.2f}\n"
                 holdings_text += f"├ Value: 🪙 {value:,.0f}\n"
                 holdings_text += f"└ P/L: {'🟢' if pl >= 0 else '🔴'} {pl:+,.0f} ({pl_percent:+.1f}%)\n\n"
-                print(f"DEBUG - Added {ticker} to holdings display")
-            else:
-                print(f"DEBUG - Skipped {ticker} - amount is {data['amount']}")
-        
-        print(f"DEBUG - Final holdings_text length: {len(holdings_text)}")
         
         if holdings_text:
             embed.add_field(name="📈 Current Holdings", value=holdings_text, inline=False)
-        else:
-            embed.add_field(
-                name="📈 Current Holdings", 
-                value="No holdings with positive amounts found.\n🔍 This might indicate a data conversion issue.", 
-                inline=False
-            )
         
         # Recent transactions
         transactions = await get_crypto_transactions(self.authorized_user_id, limit=3)
@@ -346,12 +319,31 @@ class TradingDashboard(BaseCryptoDashboard):
     async def _get_trading_embed(self) -> discord.Embed:
         """Generate trading dashboard embed"""
         trigger_orders = await get_crypto_trigger_orders(self.authorized_user_id)
+        portfolio = await get_crypto_portfolio(self.authorized_user_id)
+        prices = await get_crypto_prices()
         
         embed = discord.Embed(
             title="⚡ Advanced Trading Dashboard",
             color=0xff6600,
             timestamp=datetime.utcnow()
         )
+        
+        # Current Holdings (similar to portfolio dashboard but more compact)
+        if portfolio:
+            holdings_text = ""
+            for ticker, data in portfolio.items():
+                if data['amount'] > 0:
+                    current_price = prices.get(ticker, 0)
+                    value = data['amount'] * current_price
+                    coin_name = CRYPTO_COINS.get(ticker, {}).get('name', ticker)
+                    holdings_text += f"**{coin_name}** ({ticker}): {data['amount']:,.2f} @ 🪙{current_price:.2f} = 🪙{value:,.0f}\n"
+            
+            if holdings_text:
+                embed.add_field(name="💼 Current Holdings", value=holdings_text, inline=False)
+            else:
+                embed.add_field(name="💼 Current Holdings", value="No holdings found", inline=False)
+        else:
+            embed.add_field(name="💼 Current Holdings", value="No holdings found", inline=False)
         
         # Active trigger orders
         if not trigger_orders:
