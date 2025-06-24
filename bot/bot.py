@@ -80,59 +80,27 @@ def _register_standard_commands():
 
 
 def _register_crypto_commands():
-    """Register crypto commands as a group"""
-    crypto_group = app_commands.Group(name="crypto", description="Cryptocurrency trading commands")
+    """Register crypto commands as a group with dashboard system"""
+    crypto_group = app_commands.Group(name="crypto", description="Cryptocurrency trading dashboards")
     
-    # Information commands
-    crypto_group.add_command(app_commands.Command(
-        name="prices", 
-        callback=crypto.crypto_prices, 
-        description="View current crypto prices"
-    ))
-    crypto_group.add_command(app_commands.Command(
-        name="charts", 
-        callback=crypto.crypto_charts, 
-        description="View charts for multiple cryptos at once"
-    ))
+    # Main Dashboard Commands
     crypto_group.add_command(app_commands.Command(
         name="portfolio", 
         callback=crypto.crypto_portfolio, 
-        description="View your crypto portfolio"
+        description="🏦 Open interactive crypto portfolio dashboard"
     ))
     crypto_group.add_command(app_commands.Command(
-        name="leaderboard", 
-        callback=crypto.crypto_leaderboard, 
-        description="View crypto trading leaderboard"
+        name="market", 
+        callback=crypto.crypto_market, 
+        description="📊 Open interactive crypto market dashboard"
     ))
     crypto_group.add_command(app_commands.Command(
-        name="history", 
-        callback=crypto.crypto_history, 
-        description="View your recent crypto transactions"
-    ))
-    crypto_group.add_command(app_commands.Command(
-        name="analysis", 
-        callback=crypto.crypto_analysis, 
-        description="View detailed market analysis for skilled trading"
+        name="trading", 
+        callback=crypto.crypto_trading, 
+        description="⚡ Open advanced crypto trading dashboard"
     ))
     
-    # Trading commands
-    crypto_group.add_command(app_commands.Command(
-        name="buy", 
-        callback=crypto.crypto_buy, 
-        description="Buy cryptocurrency with your points"
-    ))
-    crypto_group.add_command(app_commands.Command(
-        name="sell", 
-        callback=crypto.crypto_sell, 
-        description="Sell cryptocurrency for points"
-    ))
-    crypto_group.add_command(app_commands.Command(
-        name="sellall", 
-        callback=crypto.crypto_sell_all, 
-        description="Sell all your cryptocurrency holdings at once"
-    ))
-    
-    # Trigger order commands
+    # Trigger order commands (kept as commands for advanced users)
     crypto_group.add_command(app_commands.Command(
         name="trigger-set", 
         callback=crypto.crypto_trigger_set, 
