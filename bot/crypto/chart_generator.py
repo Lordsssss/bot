@@ -493,3 +493,48 @@ class ChartGenerator:
             
         except Exception as e:
             print(f"Error adding transaction legend: {e}")
+
+
+# Wrapper function for dashboard compatibility
+async def generate_price_chart(ticker_input: str, timeline: str = "2h") -> discord.File:
+    """
+    Generate price chart for dashboard integration
+    
+    Args:
+        ticker_input: Single ticker (e.g., "DOGE2") or "all" for all cryptos
+        timeline: Timeline string (e.g., "2h", "1d", "30m")
+    
+    Returns:
+        discord.File: Chart file for sending
+    """
+    try:
+        # Parse timeline
+        is_valid, hours, error_msg = ChartGenerator.parse_timeline(timeline)
+        if not is_valid:
+            raise ValueError(f"Invalid timeline: {error_msg}")
+        
+        # Get coin data
+        coins = await CryptoModels.get_all_coins()
+        coin_data = {coin["ticker"]: coin for coin in coins}
+        
+        if not coin_data:
+            raise ValueError("No crypto data available")
+        
+        # Determine tickers to chart
+        if ticker_input.lower() == "all":
+            tickers = list(coin_data.keys())
+        else:
+            # Single ticker
+            ticker = ticker_input.upper()
+            if ticker not in coin_data:
+                raise ValueError(f"Crypto {ticker} not found")
+            tickers = [ticker]
+        
+        # Generate chart
+        file, embed = await ChartGenerator.generate_chart(tickers, coin_data, hours)
+        
+        return file
+        
+    except Exception as e:
+        print(f"Error generating price chart: {e}")
+        return None
